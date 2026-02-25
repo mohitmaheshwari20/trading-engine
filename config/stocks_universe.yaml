@@ -1,0 +1,29 @@
+# Stock universe configuration
+
+nifty200:
+  name: "Nifty 200"
+  description: "Top 200 stocks by market cap on NSE"
+  total_stocks: 200
+  
+  # Data file naming convention
+  file_suffix: "_NS.csv"
+  
+  # Universe filters (applied before strategy signals)
+  filters:
+    min_market_cap: 0  # Rs. Crores (0 = no filter for now)
+    exclude_sectors: []  # Add sectors to exclude if needed
+    exclude_stocks: []  # Add specific stocks to exclude
+  
+  # Index file for benchmark comparison
+  index_file: "NIFTY 50-USD_NS.csv"  # UPDATE if your index file is named differently
+  
+# Placeholder for future expansion
+nifty500:
+  name: "Nifty 500"
+  description: "Top 500 stocks - Phase 2 expansion"
+  enabled: false
+  
+sp500:
+  name: "S&P 500"
+  description: "US market - Phase 3 expansion"
+  enabled: false

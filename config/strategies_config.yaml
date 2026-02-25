@@ -1,0 +1,56 @@
+# Strategy-specific parameters
+
+mean_reversion:
+  enabled: true
+  name: "Mean Reversion - RSI + Bollinger Bands"
+  
+  # RSI parameters
+  rsi_period: 14
+  rsi_oversold: 30
+  rsi_overbought: 70
+  
+  # Bollinger Bands parameters
+  bb_period: 20
+  bb_std_dev: 2
+  
+  # Entry conditions (ALL must be true)
+  entry_conditions:
+    - "rsi < rsi_oversold"
+    - "close < lower_band"
+    - "volume > avg_volume * 1.2"  # Volume confirmation
+  
+  # Exit conditions (ANY can trigger exit)
+  exit_conditions:
+    - "rsi > rsi_overbought"
+    - "close > upper_band"
+    - "stop_loss_hit"
+    - "holding_period > 30"  # Max 30 days
+  
+  # Position sizing
+  position_size_pct: 0.05  # 5% of portfolio per trade
+  max_concurrent_positions: 5
+  
+  # Risk management
+  stop_loss_pct: 0.08  # 8% stop loss
+  take_profit_pct: 0.15  # 15% take profit (optional)
+  
+  # Filters
+  min_price: 50  # Skip stocks below Rs. 50
+  max_price: 10000  # Skip stocks above Rs. 10000
+  min_volume: 100000  # Minimum daily volume
+  
+  # Backtesting
+  backtest_start: "2017-01-01"
+  backtest_end: "2024-12-31"
+  walk_forward_window_months: 12
+  
+# Placeholder for future strategies
+trend_following:
+  enabled: false
+  name: "Trend Following - MA Crossover + ADX"
+  # Parameters to be defined in Phase 2
+  
+momentum_breakout:
+  enabled: false
+  name: "Momentum Breakout - Volume Confirmed"
+  # Parameters to be defined in Phase 3

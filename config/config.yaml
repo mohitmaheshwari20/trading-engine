@@ -1,0 +1,63 @@
+# Global Trading System Configuration
+
+system:
+  name: "Nifty 200 Systematic Trading Engine"
+  version: "1.0"
+  
+# Data paths
+data:
+  source_dir: "C:/Projects/Backtesting System/data"  # UPDATE THIS
+  universe: "nifty200"
+  start_date: "2017-01-01"  # Use 2017+ for backtesting (2015-2016 for walk-forward validation)
+  
+# Capital and risk management
+capital:
+  initial_capital: 750000  # Rs. 7.5L (midpoint of 5-10L range)
+  max_position_pct: 0.05  # 5% max per position
+  max_portfolio_exposure: 0.70  # 70% max deployed
+  reserve_cash_pct: 0.30  # 30% minimum cash reserve
+  
+# Risk limits
+risk:
+  max_drawdown_pct: 0.15  # 15% max drawdown (circuit breaker)
+  position_size_method: "fixed_pct"  # Options: fixed_pct, kelly, risk_parity
+  stop_loss_pct: 0.08  # 8% stop loss per position
+  
+# Transaction costs (for realistic backtesting)
+costs:
+  brokerage_pct: 0.0003  # 0.03% (Zerodha equity delivery)
+  stt_pct: 0.001  # 0.1% on sell side
+  exchange_transaction_charge_pct: 0.00325  # NSE charges
+  gst_on_charges: 0.18  # 18% GST on brokerage + charges
+  sebi_charges_pct: 0.000001  # Negligible but included
+  stamp_duty_pct: 0.00015  # 0.015% on buy side
+  
+# Total estimated cost per trade (buy + sell)
+# Approx 0.8-1.0% round trip - used in backtesting
+  total_cost_estimate_pct: 0.009
+
+# Tax
+tax:
+  stcg_rate: 0.20  # 20% short term capital gains
+  ltcg_rate: 0.125  # 12.5% above 1.25L exemption
+  ltcg_exemption: 125000  # Rs. 1.25L annual exemption
+  
+# Discipline tracking
+discipline:
+  require_pretrade_checklist: true
+  override_cooling_period_hours: 24
+  min_override_justification_words: 50
+  track_weekly_scorecard: true
+
+# Performance tracking
+performance:
+  benchmark_index: "NIFTY50_TRI"  # Nifty 50 Total Return Index
+  evaluation_frequency: "monthly"
+  report_format: "pdf"
+  
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_trades: true
+  log_signals: true
+  log_overrides: true
