@@ -2,10 +2,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from pathlib import Path
-import sys
-sys.path.append('..')
 
-from backtesting.metrics import PerformanceMetrics
+from metrics import PerformanceMetrics
 
 class Position:
     """
@@ -258,7 +256,7 @@ class BacktestEngine:
         self.signals_skipped = []
     
     def load_all_data(self, loader, stocks_list):
-        """Load data and pre-calculate ALL indicators once."""
+        """Load data and pre-calculate ALL indicators once (strategy-agnostic)."""
         print(f"Loading and pre-calculating indicators for {len(stocks_list)} stocks...")
         
         from data.indicators import TechnicalIndicators
@@ -267,12 +265,16 @@ class BacktestEngine:
             try:
                 df = loader.load_stock(symbol)
                 
-                # Pre-calculate indicators ONCE for entire history
+                # Pre-calculate ALL indicators ONCE for entire history
+                # Strategy-agnostic: Pass all parameters with safe defaults
                 df = TechnicalIndicators.add_all_indicators(
                     df,
-                    rsi_period=self.strategy.rsi_period,
-                    bb_period=self.strategy.bb_period,
-                    bb_std=self.strategy.bb_std_dev
+                    rsi_period=getattr(self.strategy, 'rsi_period', 14),
+                    bb_period=getattr(self.strategy, 'bb_period', 20),
+                    bb_std=getattr(self.strategy, 'bb_std_dev', 2),
+                    ema_fast=getattr(self.strategy, 'ema_fast_period', 20),
+                    ema_slow=getattr(self.strategy, 'ema_slow_period', 50),
+                    adx_period=getattr(self.strategy, 'adx_period', 14)
                 )
                 
                 if len(df) > 0:
@@ -307,50 +309,53 @@ class BacktestEngine:
         return dates
 
     def scan_for_signals(self, date):
-        """Optimized: Just slice pre-calculated data."""
+        """
+        Scan for entry signals using the strategy's generate_signals() method.
+        
+        STRATEGY-AGNOSTIC: Works with ANY strategy (mean reversion, trend following, etc.)
+        Each strategy implements its own logic in generate_signals().
+        """
         signals = []
         
         for symbol, df in self.price_data.items():
             try:
-                # Just slice - indicators already calculated!
+                # Slice data up to current date
                 df_up_to_date = df[df['Date'] <= date].copy()
                 
                 if len(df_up_to_date) < 200:
                     continue
                 
-                # NO NEED TO RECALCULATE INDICATORS!
+                # Apply basic filters (price and volume)
                 latest = df_up_to_date.iloc[-1]
                 
-                # Check filters
                 if not (self.strategy.min_price <= latest['Adj Close'] <= self.strategy.max_price):
                     continue
                 if latest['Volume'] < self.strategy.min_volume:
                     continue
                 
-                # Check signal conditions directly
-                if (latest['RSI'] < self.strategy.rsi_oversold and
-                    latest['Adj Close'] <= latest['BB_Lower'] and
-                    latest['Volume_Ratio'] > 1.2):
-                    
-                    # Calculate signal strength
-                    oversold_degree = (self.strategy.rsi_oversold - latest['RSI']) / self.strategy.rsi_oversold
-                    band_distance = (latest['BB_Lower'] - latest['Adj Close']) / latest['BB_Lower']
-                    volume_strength = min((latest['Volume_Ratio'] - 1.0), 1.0)
-                    strength = (oversold_degree + band_distance * 10 + volume_strength) / 3
-                    
+                # CALL STRATEGY'S generate_signals() method
+                # This is strategy-agnostic - each strategy implements its own logic
+                df_with_signals = self.strategy.generate_signals(df_up_to_date)
+                
+                # Check if there's a BUY signal on the latest row
+                latest_signal = df_with_signals.iloc[-1]
+                
+                if latest_signal['Signal'] == 1:  # Buy signal
                     signals.append({
                         'symbol': symbol,
                         'date': date,
-                        'price': latest['Adj Close'],
-                        'signal_strength': strength,
-                        'reason': f"RSI={latest['RSI']:.1f}, BB={latest['BB_Lower']:.2f}, Vol={latest['Volume_Ratio']:.2f}x",
-                        'rsi': latest['RSI'],
-                        'bb_lower': latest['BB_Lower']
+                        'price': latest_signal['Adj Close'],
+                        'signal_strength': latest_signal['Signal_Strength'],
+                        'reason': latest_signal['Signal_Reason']
                     })
             
             except Exception as e:
+                # Log error but continue with other stocks
+                if self.debug:
+                    print(f"  Error scanning {symbol}: {str(e)}")
                 continue
         
+        # Sort by signal strength (strongest first)
         signals.sort(key=lambda x: x['signal_strength'], reverse=True)
         return signals
     
@@ -358,8 +363,8 @@ class BacktestEngine:
         """
         Check all open positions for exit conditions.
         
-        IMPROVED: Uses intraday Low to detect stop loss hits,
-        exits at stop loss price (not close) with realistic slippage.
+        STRATEGY-AGNOSTIC: Calls strategy.generate_signals() for exit signals.
+        Also checks stop loss with intraday Low detection and realistic slippage.
         
         Args:
             date: Current date
@@ -393,28 +398,20 @@ class BacktestEngine:
                 positions_to_close.append((symbol, exit_price, 'Stop Loss'))
                 continue
             
-            # Exit condition 2: Max holding period (30 days)
-            hold_days = (date - position.entry_date).days
-            if hold_days >= self.strategy.config.get('max_holding_days', 30):
-                positions_to_close.append((symbol, current_price, 'Max Hold Time'))
-                continue
-            
-            # Exit condition 3 & 4: Need indicators (RSI overbought, Upper BB)
+            # Exit condition 2: Strategy-specific exit signal
             try:
-                # Indicators already calculated in optimized version
-                # Just check the latest row
+                # CALL STRATEGY'S generate_signals() to check for SELL signal
+                df_with_signals = self.strategy.generate_signals(df_up_to_date)
+                latest_signal = df_with_signals.iloc[-1]
                 
-                # Exit condition 3: RSI overbought
-                if 'RSI' in latest and latest['RSI'] > self.strategy.rsi_overbought:
-                    positions_to_close.append((symbol, current_price, 'RSI Overbought'))
-                    continue
-                
-                # Exit condition 4: Price at upper BB
-                if 'BB_Upper' in latest and current_price >= latest['BB_Upper']:
-                    positions_to_close.append((symbol, current_price, 'Upper BB'))
+                if latest_signal['Signal'] == -1:  # Sell signal
+                    reason = latest_signal.get('Signal_Reason', 'Strategy Exit')
+                    positions_to_close.append((symbol, current_price, reason))
                     continue
             
             except Exception as e:
+                if self.debug:
+                    print(f"  Error checking exit for {symbol}: {str(e)}")
                 continue
         
         # Execute exits
@@ -530,11 +527,46 @@ class BacktestEngine:
                 print(f"  {pct_complete:.0f}% complete ({i}/{len(trading_dates)} days)...")
      
         # Close all remaining positions at end
+        # FIX: Check if stop loss was hit during holding period
         print("\nClosing remaining positions...")
         for symbol in list(self.portfolio.positions.keys()):
+            position = self.portfolio.positions[symbol]
             df = self.price_data[symbol]
-            final_price = df.iloc[-1]['Adj Close']
-            self.portfolio.sell(symbol, final_price, self.end_date, 'Backtest End')
+            
+            # Get price data from entry to backtest end
+            df_holding_period = df[df['Date'] >= position.entry_date]
+            
+            # Check if stop loss was hit at any point during holding period
+            stop_loss_hit = False
+            exit_price = None
+            exit_date = None
+            exit_reason = 'Backtest End'
+            
+            for idx, row in df_holding_period.iterrows():
+                # Check if LOW of the day touched stop loss
+                if row['Low'] <= position.stop_loss:
+                    stop_loss_hit = True
+                    exit_date = row['Date']
+                    
+                    # Exit at stop loss price with 2% slippage
+                    # But if price gapped way down (low < stop), use the low
+                    exit_price = max(position.stop_loss * 0.98, row['Low'])
+                    
+                    # Conservative: don't exit better than the close
+                    exit_price = min(exit_price, row['Adj Close'])
+                    
+                    exit_reason = 'Stop Loss'
+                    break
+            
+            # If stop loss was NOT hit, close at final price
+            if not stop_loss_hit:
+                exit_price = df.iloc[-1]['Adj Close']
+                exit_date = self.end_date
+                exit_reason = 'Backtest End'
+            
+            # Execute the exit
+            self.portfolio.sell(symbol, exit_price, exit_date, exit_reason)
+
 
         # Record final equity after all positions closed
         self.portfolio.record_equity(self.end_date, self.price_data)  # ADD THIS LINE
