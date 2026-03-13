@@ -112,19 +112,41 @@
 
 ---
 
-## PHASE 3 — MODULE B: SECTOR ALPHA FILTER
+## PHASE 3 — MODULE B: SECTOR ALPHA FILTER ✅ COMPLETE
 
-> **Goal:** Filter universe to stocks demonstrating relative strength vs. sector peers.  
-> **Validation Gate:** 40–60% pass rate on a sample date.
+> **Goal:** Filter universe to stocks demonstrating relative strength vs. sector peers.
+> **Validation Gate:** 40–60% pass rate on at least 3 sample dates — PASSED.
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 3.1 | Build 15-day return calculator for all 200 stocks | `[ ]` | Rolling, computed daily |
-| 3.2 | Build sector median logic — group by sector, compute median 15d return per group | `[ ]` | |
-| 3.3 | Build Others bucket fallback — compare against Nifty 200 index median | `[ ]` | ~55–60 stocks |
-| 3.4 | Integrate sector mapping JSON into filter pipeline | `[ ]` | |
-| 3.5 | **VALIDATION:** Confirm 40–60% pass rate on at least 3 sample dates across the backtest window | `[ ]` | If pass rate > 70%, filter is too loose; if < 30%, too restrictive |
-| 3.6 | Add `sector_bucket` field to output (Named Sector vs. Others) for post-backtest analysis | `[ ]` | Required for Observation 2 validation |
+| 3.1 | Build 15-day return calculator for all 200 stocks | `[x]` | `compute_15d_return()` — uses actual trading day index, not calendar days. Uses Adj Close for corporate action accuracy. Returns None gracefully for insufficient data. |
+| 3.2 | Build sector median logic — group by sector, compute median 15d return per group | `[x]` | `get_eligible_symbols()` — computes sector medians dynamically per date. Pre-computes sector membership lists at init for efficiency. |
+| 3.3 | Build Others bucket fallback — compare against Nifty 200 index median | `[x]` | Others stocks compared against median of all available 200 stocks' 15d returns on that date. Confirmed working — 40 stocks in Others bucket. |
+| 3.4 | Integrate sector mapping JSON into filter pipeline | `[x]` | `load_sector_mapping()` loads JSON cleanly. 200 symbols, 17 named sectors + Others. 199/200 matched to price data (1 symbol missing CSV — not a blocker). |
+| 3.5 | **VALIDATION:** Confirm 40–60% pass rate on at least 3 sample dates | `[x]` | 2018-06-15: 46.0% ✓, 2021-03-15: 46.6% ✓, 2024-06-14: 47.3% ✓. Stable convergence to ~50% as expected by construction. |
+| 3.6 | Add `sector_bucket` field to output (Named Sector vs. Others) for post-backtest analysis | `[x]` | `sector_bucket` field present in every eligible stock dict. Required for Observation 2 validation in Phase 7. |
+
+### Phase 3 — Validation Results (Real Data)
+| Date | Universe | Passing | Pass Rate |
+|------|----------|---------|-----------|
+| 2018-06-15 | 161 | 74 | 46.0% ✅ |
+| 2021-03-15 | 174 | 81 | 46.6% ✅ |
+| 2024-06-14 | 188 | 89 | 47.3% ✅ |
+
+### Phase 3 — Key Observations
+| Observation | Detail |
+|-------------|--------|
+| Others bucket size | 40 stocks (spec estimated 55–60 — actual is lower, not a blocker) |
+| Pass rate stability | Converges to ~50% across all dates — mathematically expected (median split) |
+| Metals & Mining Jun 2024 | Sector median negative (-1.72%) — filter still correctly passes relative outperformers |
+| Others bucket pass rate | 40% on Jun 2024 — slightly lower than named sectors (~50%) |
+| Observation 2 deferred | Others vs Named Sector win rate / expectancy comparison deferred to Phase 7 trade log analysis |
+| 1 missing symbol | 199/200 symbols matched to price data — 1 CSV missing, not a blocker |
+
+### Phase 3 — File Outputs
+| File | Location |
+|------|----------|
+| `module_b_sector.py` | `strategies/all_weather/` |
 
 ---
 
