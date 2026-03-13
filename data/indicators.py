@@ -228,6 +228,57 @@ class TechnicalIndicators:
         return adx
     
     @staticmethod
+    def calculate_atr(df, period=14):
+        """
+        Calculate Average True Range (ATR) using Wilder's smoothing.
+
+        ATR measures average daily price volatility over N periods.
+        It is the core volatility unit for the All-Weather strategy:
+            - Position sizing  : Qty = (Equity * 0.01) / (3 * ATR)
+            - Initial stop     : Entry - (3 * ATR)
+            - Breakeven trigger: Entry + (1 * ATR)
+            - Chandelier stop  : Highest Close - (3 * ATR)
+            - Time-stop hurdle : 0.5 * ATR
+            - OFF state stop   : 1.5 * ATR
+
+        Uses Wilder's smoothing (same method as calculate_adx) to ensure
+        ATR values are internally consistent across both methods.
+
+        Args:
+            df    : DataFrame with High, Low, Close columns
+            period: Lookback period (default 14 — Wilder's standard)
+
+        Returns:
+            pandas Series with ATR values (same index as input df)
+        """
+        required_cols = ['High', 'Low', 'Close']
+        if not all(col in df.columns for col in required_cols):
+            raise ValueError(f"DataFrame must contain {required_cols}")
+
+        if len(df) < period + 1:
+            raise ValueError(
+                f"Need at least {period + 1} rows for ATR calculation, got {len(df)}"
+            )
+
+        # Step 1: True Range — largest of the three measures
+        high_low   = df['High'] - df['Low']
+        high_close = (df['High'] - df['Close'].shift(1)).abs()
+        low_close  = (df['Low']  - df['Close'].shift(1)).abs()
+
+        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+
+        # Step 2: Initialise ATR using simple average for the first window
+        atr = tr.rolling(window=period).mean()
+
+        # Step 3: Apply Wilder's smoothing for all subsequent values
+        # Formula: ATR[i] = ATR[i-1] - (ATR[i-1] / period) + TR[i]
+        #        = ATR[i-1] * (period - 1) / period + TR[i] / period
+        for i in range(period, len(df)):
+            atr.iloc[i] = (atr.iloc[i - 1] * (period - 1) + tr.iloc[i]) / period
+
+        return atr
+
+    @staticmethod
     def calculate_volume_ratio(df, period=20):
         """
         Calculate volume ratio (current volume vs average volume).
@@ -307,7 +358,12 @@ class TechnicalIndicators:
         result['ADX'] = TechnicalIndicators.calculate_adx(
             result, period=adx_period
         )
-        
+
+        # ATR — volatility unit for All-Weather stop sizing
+        result['ATR'] = TechnicalIndicators.calculate_atr(
+            result, period=adx_period
+        )
+
         # Regime filter (Phase 2)
         result['SMA_200'] = TechnicalIndicators.calculate_sma(
             result, period=200

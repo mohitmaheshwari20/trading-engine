@@ -1,0 +1,2 @@
+Signal,Symbol,Entry_Price,SL_Price,Position_Size_Rs,Shares,Strategy,Reason
+BUY,TIINDIA.NS,2837.6,2411.96,5000,1,EMA20_50_ADX20_EMA200,EMA Crossover Up + ADX OK + Above EMA200

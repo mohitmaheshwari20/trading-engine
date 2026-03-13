@@ -1,0 +1,32 @@
+================================================================================
+MONTE CARLO SIMULATION RESULTS
+Date: 2026-02-27 11:57:38
+Simulations: 10,000 (shuffle: 5,000 + bootstrap: 5,000)
+Method: Daily return shuffle + bootstrap resampling
+Daily returns used: 2226 | Years: 8.99
+================================================================================
+
+ACTUAL STRATEGY PERFORMANCE
+--------------------------------------------------------------------------------
+Annual Return:  +20.93%
+Sharpe Ratio:   1.252
+Max Drawdown:   14.30%
+
+SIMULATION DISTRIBUTION
+--------------------------------------------------------------------------------
+Metric                   5th%    25th%   Median    75th%    95th%   Actual     Rank
+--------------------------------------------------------------------------------
+Annual Return          15.69%   20.92%   20.93%   20.93%   26.46%   20.93%    60.4%
+Sharpe Ratio            0.811    1.252    1.252    1.253    1.694    1.252    48.4%
+Max Drawdown            7.80%    9.43%   10.97%   12.92%   16.65%   14.30%    13.9%
+
+PROBABILITY OF RUIN ANALYSIS
+--------------------------------------------------------------------------------
+Definition: Annual Return < 13.0% OR Max Drawdown > 20.0%
+Probability of Ruin: 2.23%
+
+INTERPRETATION
+--------------------------------------------------------------------------------
+Annual return only beats 60.4% of simulations
+Probability of ruin is low (2.23%)
+================================================================================

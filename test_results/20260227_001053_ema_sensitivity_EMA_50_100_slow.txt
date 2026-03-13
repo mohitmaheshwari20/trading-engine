@@ -1,0 +1,66 @@
+======================================================================
+TEST: 20260227_001053_ema_sensitivity_EMA_50_100_slow
+DATE: 2026-02-27 00:31:14
+======================================================================
+
+CONFIGURATION
+----------------------------------------------------------------------
+universe_file: tests/trend_following_30_universe.csv
+initial_capital: 750000
+position_size_pct: 0.05
+max_concurrent_positions: 5
+transaction_cost_pct: 0.009
+ema_fast_period: 50
+ema_slow_period: 100
+adx_period: 14
+adx_threshold: 20
+trailing_stop_pct: 0.15
+stop_loss_pct: 0.15
+min_price: 10
+max_price: 10000
+min_volume: 100000
+start_date: 2017-01-01
+end_date: 2025-12-31
+
+BACKTEST RESULTS
+======================================================================
+
+RETURNS
+----------------------------------------------------------------------
+Initial Capital:        Rs. 750,000
+Final Capital:          Rs. 4,483,478
+Gross Return:           +497.80% (+21.99% annually)
+Transaction Costs:      Rs. 136,052 (18.14%)
+
+RISK METRICS
+----------------------------------------------------------------------
+Max Drawdown:           24.92%
+Longest Drawdown:       506 days
+Avg Recovery Time:      34 days
+Time Underwater:        89.1%
+Sharpe Ratio:           0.972
+Sortino Ratio:          1.210
+Calmar Ratio:           0.882
+
+TRADE STATISTICS
+----------------------------------------------------------------------
+Total Trades:           49
+Win Rate:               38.78%
+Monthly Win Rate:       57.01%
+Profit Factor:          8.87
+Expectancy:             104.33% per trade
+Avg Win/Loss Ratio:     14.00
+
+BEHAVIORAL METRICS
+----------------------------------------------------------------------
+Longest Win Streak:     6 trades
+Longest Loss Streak:    13 trades
+Worst Single Loss:      -21.66%
+
+SIGNAL EFFICIENCY
+----------------------------------------------------------------------
+Signals Generated:      101
+Signals Executed:       49
+Signals Skipped:        48
+
+======================================================================

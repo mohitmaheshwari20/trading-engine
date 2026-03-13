@@ -1,0 +1,2 @@
+scan_date,symbol,current_price,trend,atr,top_signal,error,primary_zone_center,primary_zone_high,primary_zone_low,primary_touch_count,primary_age_days,primary_proximity,primary_flip_risk,primary_first_touch,primary_last_touch,secondary_zone_center,secondary_zone_high,secondary_zone_low,secondary_touch_count,secondary_age_days,secondary_proximity,secondary_flip_risk,secondary_first_touch,secondary_last_touch
+2026-03-09,BSE.NS,2751.6,down,104.61,BUY,,2578.0,2604.0,2552.0,5,57,TESTING,False,2024-12-01,2025-01-27,2533.0,2559.0,2507.0,2,21,APPROACHING,False,2024-11-01,2024-11-21

@@ -3,10 +3,20 @@ import pandas as pd
 from datetime import datetime
 import os
 
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# Add current directory to path for local imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add parent directory to path for imports (so `backtesting` package is discoverable)
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir in sys.path:
+    sys.path.remove(parent_dir)
+sys.path.insert(0, parent_dir)
+
+# Remove current directory entry when it's the package itself, to avoid
+# shadowing `backtesting` package when script is executed from inside it.
+cur = os.path.abspath(os.getcwd())
+if cur == os.path.abspath(os.path.dirname(__file__)):
+    if '' in sys.path:
+        sys.path.remove('')
+    if cur in sys.path:
+        sys.path.remove(cur)
 
 from data.loader import DataLoader
 from utils.config_loader import ConfigLoader
@@ -37,7 +47,7 @@ def main():
         'ema_fast_period': 20,
         'ema_slow_period': 50,
         'adx_period': 14,
-        'adx_threshold': 25,
+        'adx_threshold': 20,
         'trailing_stop_pct': 0.15,  # 15% trailing stop
         'position_size_pct': 0.05,  # 5% per position
         'max_concurrent_positions': 5,

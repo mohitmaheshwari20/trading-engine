@@ -1,0 +1,2 @@
+scan_date,symbol,current_price,trend,atr,top_signal,error,primary_zone_center,primary_zone_high,primary_zone_low,primary_touch_count,primary_age_days,primary_proximity,primary_flip_risk,primary_first_touch,primary_last_touch
+2026-03-07,BSE.NS,2751.6,down,104.6143,NONE,,,,,,,,,,
