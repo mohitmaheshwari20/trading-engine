@@ -50,7 +50,7 @@ def main():
         'adx_threshold': 20,
         'trailing_stop_pct': 0.15,  # 15% trailing stop
         'position_size_pct': 0.05,  # 5% per position
-        'max_concurrent_positions': 5,
+        'max_concurrent_positions': 10,
         'stop_loss_pct': 0.15,  # Same as trailing stop for consistency
         'min_price': 10,
         'max_price': 10000,
@@ -72,7 +72,7 @@ def main():
     loader = DataLoader(data_path)
     
     # Load 15-stock universe
-    universe_file = r'C:\Projects\trading_engine\tests\trend_following_30_universe.csv'
+    universe_file = r'C:\Projects\trading_engine\tests\nifty200_universe.csv'
     print(f"Loading universe from: {universe_file}")
     
     try:
@@ -108,11 +108,12 @@ def main():
     
     backtest = BacktestEngine(
         strategy=strategy,
-        initial_capital=initial_capital,
+        initial_capital=100000,
         start_date='2017-01-01',  # Full 8-year period
         end_date='2025-12-31',
         transaction_cost_pct=main_config['costs']['total_cost_estimate_pct'],
-        debug=True  # Set to True for detailed trade-by-trade logging
+        debug=False,
+        max_positions=10
     )
     
     # Run backtest
@@ -164,10 +165,29 @@ def main():
         print("BACKTEST COMPLETE")
         print("="*70)
         
-        # Save results to CSV (optional - commented out for console-only)
-        # trades_df = pd.DataFrame(results['closed_trades'])
-        # trades_df.to_csv('trend_following_backtest_trades.csv', index=False)
-        # print("\nTrades saved to: trend_following_backtest_trades.csv")
+        import os
+        log_dir = r'C:\Projects\trading_engine\logs'
+        os.makedirs(log_dir, exist_ok=True)
+
+        # Save trade log
+        trades_df = pd.DataFrame(results['closed_trades'])
+        trade_log_path = os.path.join(log_dir, 'strategy1_nifty200_trade_log.csv')
+        trades_df.to_csv(trade_log_path, index=False)
+        print(f"\nTrade log saved: {trade_log_path} ({len(trades_df)} trades)")
+
+        # Save monthly equity curve
+        equity_df = pd.DataFrame({
+            'date'           : results['equity_dates'],
+            'portfolio_value': results['equity_curve']
+        })
+        equity_df['date'] = pd.to_datetime(equity_df['date'])
+        equity_df = equity_df.set_index('date')
+        monthly_equity = equity_df['portfolio_value'].resample('ME').last().reset_index()
+        monthly_equity.columns = ['date', 'portfolio_value']
+        monthly_equity['date'] = monthly_equity['date'].dt.strftime('%Y-%m-%d')
+        monthly_path = os.path.join(log_dir, 'strategy1_monthly_equity.csv')
+        monthly_equity.to_csv(monthly_path, index=False)
+        print(f"Monthly equity curve saved: {monthly_path} ({len(monthly_equity)} months)")
     else:
         print("\nERROR: Backtest failed to produce results")
 

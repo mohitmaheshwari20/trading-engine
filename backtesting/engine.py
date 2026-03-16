@@ -164,11 +164,12 @@ class BacktestEngine:
     """
 
     def __init__(self, strategy, initial_capital, start_date, end_date,
-                 transaction_cost_pct=0.009, debug=False):
-        self.strategy   = strategy
-        self.start_date = pd.to_datetime(start_date)
-        self.end_date   = pd.to_datetime(end_date)
-        self.debug      = debug
+                 transaction_cost_pct=0.009, debug=False, max_positions=5):
+        self.strategy      = strategy
+        self.start_date    = pd.to_datetime(start_date)
+        self.end_date      = pd.to_datetime(end_date)
+        self.debug         = debug
+        self.max_positions = max_positions
 
         self.portfolio = Portfolio(
             initial_capital=initial_capital,
@@ -513,7 +514,7 @@ class BacktestEngine:
                 # 4. Execute confirmed buys first, then any direct buys
                 all_buys = confirmed_buys + new_signals
                 if all_buys:
-                    self.execute_entries(all_buys, date)
+                    self.execute_entries(all_buys, date, self.max_positions)
 
             self.portfolio.record_equity(date, self.price_data)
 

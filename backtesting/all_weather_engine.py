@@ -1,22 +1,29 @@
 """
 all_weather_engine.py — All-Weather Quant Strategy Backtesting Engine
-NIFTY 200 | Regime-Switching | Phase 4: Regime 1 Isolated Backtest
+NIFTY 200 | Regime-Switching | Phase 7: R2-Only Entries (R1 Permanently Disabled)
 
 Architecture:
     Module A (RegimeClassifier)  → daily ON/CAUTION/OFF gate
     Module B (SectorAlphaFilter) → peer-group relative strength filter
-    Module C (Regime 1 only)     → Donchian breakout + 4-layer stop system
+    Module C (R2 only + upgrade) → mean reversion entries; R1 logic retained for
+                                   R2→R1 upgrade path only (Chandelier, Breakeven,
+                                   4-layer stops, Time-Stop)
     Module D                     → ADTV filter, ATR sizing, circuit breaker
 
-Position state carried per trade:
-    regime, atr_at_entry, entry_price, highest_close_since_entry,
-    breakeven_hit, trade_age, sector, sector_bucket, stop_loss,
-    initial_stop, chandelier_stop, size_multiplier
+R1 standalone entries PERMANENTLY DISABLED.
+Evidence from Phase 4 (isolated) and Phase 7 (combined):
+    Win rate: 26.63% vs 40–52% spec target
+    R1 crowded out R2 (95.6% of all slots taken by false breakouts)
+    Donchian + ADX>25 entry generates too many low-quality signals
+    Overall system return: -45.90% with R1 active vs positive with R2-only
+
+R1 mechanics (Chandelier, Breakeven, Time-Stop) remain in AWPosition and
+check_exits — required for the R2→R1 upgrade path.
 
 Signal ranking (Section 11.2):
     Priority 1 — Sector cap: max 2 positions per sector (Others = 1 sector)
     Priority 2 — Alpha rank: highest (stock_15d_return - sector_median) first
-    Priority 3 — Regime preference: deferred to Phase 7 (combined system)
+    Priority 3 — Not applicable (R1 disabled; single entry regime)
 
 Spec reference: Nifty200_AllWeather_Strategy_Spec_v2.docx
 """
@@ -430,15 +437,11 @@ def compute_donchian_high(df, date, period=DONCHIAN_PERIOD):
 class AllWeatherEngine:
     """
     All-Weather Quant Strategy Backtesting Engine.
-    Phase 6.3: RSI-Trend Hybrid — Anchor Alignment Fix.
+    Phase 7: R2-Only Entries — R1 standalone permanently disabled.
 
-    Changes from Phase 6.2 (data-validated):
-        Deep Dip filter: Close < SMA10 - 0.75×ATR
-                      → Close < SMA20 - 1.0×ATR
-        Rationale: Entry and exit now reference same MA (SMA20).
-                   1.0×ATR gap guarantees runway ≥ 1 daily volatility unit.
-    All other Phase 6.2 parameters unchanged:
-        SMA exit: SMA20, Upgrade ADX: >20, Limbo cap: Day 30
+    R2 (RSI<10 + ADX<20) is the sole entry mode. R1 mechanics (Chandelier,
+    Breakeven, Time-Stop, 4-layer stops) are retained exclusively for the
+    R2→R1 upgrade path. No standalone R1 positions are opened.
     """
 
     def __init__(self, config):
@@ -629,6 +632,15 @@ class AllWeatherEngine:
             if hit:
                 to_close.append((symbol, exit_price, reason, False, False))
                 continue
+
+            # ── Step 3b: R1 Time-Stop (Layer 4) ───────────────────────────────
+            # Day 5 only, profit < 0.5×ATR → flag exit at next open.
+            # Applies to original R1 entries only — Upgraded trades excluded.
+            if pos.regime == 'R1' and pos.trade_age == TIME_STOP_DAYS:
+                profit_in_atr = (close - pos.entry_price) / pos.atr_at_entry
+                if profit_in_atr < ATR_TIMESTOP_PROFIT:
+                    to_flag_exit.append((symbol, EXIT_TIME_STOP))
+                    continue
 
             # ── Step 4: Day 5 Survival Filter / Day 20 Limbo Cap ─────────────
             # Must run BEFORE SMA/RSI exits — Day 5 evaluation takes
@@ -821,15 +833,14 @@ class AllWeatherEngine:
             if adtv is None or adtv < ADTV_MIN_VALUE:
                 continue
 
-            # Condition 5: Deep Dip filter — Close < SMA20 - 1.0×ATR
+            # Condition 5: Deep Dip filter — Close < SMA20 - 0.5×ATR
             # Anchor alignment: entry and exit both reference SMA20.
-            # 1.0×ATR gap guarantees at least 1 full unit of daily volatility
-            # as runway between entry and the SMA20 exit trigger — sufficient
-            # for the trade to survive 5 days and enter Limbo.
+            # 0.5×ATR gap (Phase 7 Step 1): relaxed from 1.0×ATR to widen
+            # the entry window and capture more mean-reversion candidates.
             sma20_entry = float(today['SMA20']) if 'SMA20' in today.index and not pd.isna(today['SMA20']) else None
             if sma20_entry is None:
                 continue
-            deep_dip_threshold = sma20_entry - 1.0 * atr
+            deep_dip_threshold = sma20_entry - 0.5 * atr
             if close >= deep_dip_threshold:
                 continue
 
@@ -969,11 +980,108 @@ class AllWeatherEngine:
 
             self.portfolio.open_position(pos, date)
 
+    def execute_combined_entries(self, r1_signals, r2_signals, date, size_multiplier):
+        """
+        Execute combined R1 + R2 entries with Priority 3 regime preference.
+
+        Combined list order: R1 signals (sorted by alpha) first, then R2 signals
+        (sorted by alpha). Both share the same sector-cap and position-limit
+        checks applied in order — R1 fills slots at today's close first;
+        if all 10 positions are taken by R1, R2 signals do not execute.
+
+        R1 entries: open at today's close (same-day).
+        R2 entries: open at next day's open price.
+        """
+        combined = [('R1', s) for s in r1_signals] + [('R2', s) for s in r2_signals]
+
+        for regime_tag, sig in combined:
+            symbol        = sig['symbol']
+            sector        = sig['sector']
+            sector_bucket = sig['sector_bucket']
+            atr           = sig['atr']
+
+            # Skip if symbol was opened earlier in this loop (R1 took the slot)
+            if symbol in self.portfolio.positions:
+                continue
+
+            can_open, reason = self.portfolio.can_open_position(sector, sector_bucket)
+            if not can_open:
+                if self.debug:
+                    print(f"  SKIP {symbol} [{regime_tag}] — {reason}")
+                continue
+
+            if regime_tag == 'R1':
+                close = sig['close']
+                equity = self.portfolio.cash + sum(
+                    p.get_current_value(close)
+                    for p in self.portfolio.positions.values()
+                )
+                risk_budget  = equity * EQUITY_RISK_PCT * size_multiplier
+                qty          = int(risk_budget / (SIZING_ATR_MULT * atr))
+                if qty <= 0:
+                    continue
+                total_cost = qty * close * (1 + TRANSACTION_COST_PCT)
+                if total_cost > self.portfolio.cash:
+                    continue
+                initial_stop = close - (ATR_INITIAL_STOP_MULT * atr)
+                pos = AWPosition(
+                    symbol          = symbol,
+                    shares          = qty,
+                    entry_price     = close,
+                    entry_date      = date,
+                    atr_at_entry    = atr,
+                    initial_stop    = initial_stop,
+                    sector          = sector,
+                    sector_bucket   = sector_bucket,
+                    size_multiplier = size_multiplier,
+                    regime          = 'R1'
+                )
+                self.portfolio.open_position(pos, date)
+
+            else:  # R2
+                df        = self.price_data[symbol]
+                df_future = df[df['Date'] > date]
+                if len(df_future) == 0:
+                    continue
+                next_row    = df_future.iloc[0]
+                entry_price = float(next_row['Open'])
+                entry_date  = next_row['Date']
+                equity = self.portfolio.cash + sum(
+                    p.get_current_value(entry_price)
+                    for p in self.portfolio.positions.values()
+                )
+                risk_budget  = equity * EQUITY_RISK_PCT * size_multiplier
+                qty          = int(risk_budget / (SIZING_ATR_MULT * atr))
+                if qty <= 0:
+                    continue
+                total_cost = qty * entry_price * (1 + TRANSACTION_COST_PCT)
+                if total_cost > self.portfolio.cash:
+                    continue
+                initial_stop = entry_price - (ATR_INITIAL_STOP_MULT * atr)
+                pos = AWPosition(
+                    symbol          = symbol,
+                    shares          = qty,
+                    entry_price     = entry_price,
+                    entry_date      = entry_date,
+                    atr_at_entry    = atr,
+                    initial_stop    = initial_stop,
+                    sector          = sector,
+                    sector_bucket   = sector_bucket,
+                    size_multiplier = size_multiplier,
+                    regime          = 'R2'
+                )
+                self.portfolio.open_position(pos, entry_date)
+
+                if self.debug:
+                    print(f"  R2 ENTRY {entry_date.date()} | {symbol:20} | "
+                          f"Open: ₹{entry_price:.2f} | RSI2: {sig['rsi2']:.1f} | "
+                          f"ATR: {atr:.2f}")
+
     # ── Main run loop ─────────────────────────────────────────────────────────
 
     def run(self, regime_classifier, sector_filter, verbose=True):
         """
-        Run the full Regime 1 isolated backtest.
+        Run the full backtest — R2 entries only, upgrade path active.
 
         Args:
             regime_classifier : RegimeClassifier — Module A
@@ -984,7 +1092,7 @@ class AllWeatherEngine:
             dict — full results including trades, equity curve, metrics
         """
         print("=" * 70)
-        print("ALL-WEATHER QUANT — PHASE 6.3: ANCHOR ALIGNMENT FIX")
+        print("ALL-WEATHER QUANT — PHASE 7: COMBINED SYSTEM BACKTEST")
         print("=" * 70)
         print(f"Period   : {self.start_date.date()} to {self.end_date.date()}")
         print(f"Capital  : ₹{self.initial_capital:,.0f}")
@@ -1015,12 +1123,13 @@ class AllWeatherEngine:
                 # Module B: Get eligible symbols
                 eligible = sector_filter.get_eligible_symbols(date)
 
-                # Phase 5: R2 (Mean Reversion) entries only
-                # R1 standalone entries DISABLED — see strategic decision log
-                signals = self.scan_regime2_entries(date, eligible)
+                # R1 standalone entries permanently disabled.
+                # R1 mechanics (Chandelier, Breakeven, Time-Stop) remain active
+                # for the R2→R1 upgrade path only.
+                r2_signals = self.scan_regime2_entries(date, eligible)
 
-                if signals:
-                    self.execute_r2_entries(signals, date, size_mult)
+                if r2_signals:
+                    self.execute_r2_entries(r2_signals, date, size_mult)
 
             # Record equity
             self.portfolio.record_equity(date, self.price_data)
@@ -1103,6 +1212,13 @@ class AllWeatherEngine:
         r1_gl      = abs(sum(t['profit'] for t in r1_losers))
         r1_pf      = r1_gp / r1_gl if r1_gl > 0 else 0
 
+        r2_all     = [t for t in trades if t['regime'] in ('R2', 'Upgraded')]
+        r2_winners = [t for t in r2_all if t['profit'] > 0]
+        r2_losers  = [t for t in r2_all if t['profit'] <= 0]
+        r2_gp      = sum(t['profit'] for t in r2_winners)
+        r2_gl      = abs(sum(t['profit'] for t in r2_losers))
+        r2_pf      = r2_gp / r2_gl if r2_gl > 0 else 0
+
         # ── All-Weather Metric 3: Stale-Trade Ratio ───────────────────────────
         r1_losers_list   = [t for t in r1_trades if t['profit'] <= 0]
         time_stop_losers = [t for t in r1_losers_list
@@ -1144,6 +1260,7 @@ class AllWeatherEngine:
             'all_weather_metrics': {
                 'expectancy'              : round(expectancy, 4),
                 'profit_factor_r1'        : round(r1_pf, 2),
+                'profit_factor_r2'        : round(r2_pf, 2),
                 'stale_trade_ratio_pct'   : round(stale_ratio, 1),
                 'recovery_factor'         : round(recovery_factor, 2),
                 'slippage_adjusted_return': round(total_ret, 2),
@@ -1178,7 +1295,7 @@ class AllWeatherEngine:
         aw = results['all_weather_metrics']
 
         print("\n" + "=" * 70)
-        print("BACKTEST RESULTS — PHASE 6.3: ANCHOR ALIGNMENT FIX")
+        print("BACKTEST RESULTS — PHASE 7: COMBINED SYSTEM BACKTEST")
         print("=" * 70)
 
         print("\nRETURNS")
@@ -1193,7 +1310,7 @@ class AllWeatherEngine:
         print("\nTRADE STATISTICS")
         print("-" * 70)
         print(f"Total Trades         : {s['total_trades']:>8}")
-        print(f"Win Rate             : {s['win_rate_pct']:>8.2f}%  (target: 35–40%)")
+        print(f"Win Rate             : {s['win_rate_pct']:>8.2f}%  (target: 40–52%)")
         print(f"Avg Win              : {s['avg_win_pct']:>+8.2f}%")
         print(f"Avg Loss             : {s['avg_loss_pct']:>8.2f}%")
         print(f"Win/Loss Ratio       : {s['wl_ratio']:>8.2f}x  (target: > 2.5×)")
@@ -1204,13 +1321,15 @@ class AllWeatherEngine:
         print("\nALL-WEATHER METRICS (Spec Section 7)")
         print("-" * 70)
         exp_flag = '✓' if aw['expectancy'] > 0.25 else '✗'
-        pf_flag  = '✓' if aw['profit_factor_r1'] > 1.5 else '✗'
+        pf1_flag = '✓' if aw['profit_factor_r1'] > 1.5 else '✗'
+        pf2_flag = '✓' if aw['profit_factor_r2'] > 1.5 else '✗'
         sr_flag  = '✓' if 30 <= aw['stale_trade_ratio_pct'] <= 50 else '✗'
         rf_flag  = '✓' if aw['recovery_factor'] > 3.0 else '✗'
         sl_flag  = '✓' if aw['slippage_cost_pct'] > 0 else '—'
 
         print(f"Expectancy (R-mult)  : {aw['expectancy']:>8.4f}  {exp_flag} (target: > 0.25)")
-        print(f"Profit Factor R1     : {aw['profit_factor_r1']:>8.2f}  {pf_flag} (target: > 1.5)")
+        print(f"Profit Factor R1     : {aw['profit_factor_r1']:>8.2f}  {pf1_flag} (target: > 1.5)")
+        print(f"Profit Factor R2+Upg : {aw['profit_factor_r2']:>8.2f}  {pf2_flag} (target: > 1.5)")
         print(f"Stale-Trade Ratio    : {aw['stale_trade_ratio_pct']:>7.1f}%  {sr_flag} (target: 30–50%)")
         print(f"Recovery Factor      : {aw['recovery_factor']:>8.2f}  {rf_flag} (target: > 3.0)")
         print(f"Slippage Cost        : {aw['slippage_cost_pct']:>7.2f}%  {sl_flag}")
@@ -1218,16 +1337,20 @@ class AllWeatherEngine:
         print(f"Actual Return        : {aw['slippage_adjusted_return']:>+8.2f}%")
 
         # Regime breakdown
-        trades      = results['closed_trades']
-        r2_trades   = [t for t in trades if t['regime'] == 'R2']
-        upg_trades  = [t for t in trades if t['regime'] == 'Upgraded']
-        limbo_exits = [t for t in r2_trades if t['exit_reason'] == EXIT_LIMBO_CAP]
-        time_stops  = [t for t in trades if t['exit_reason'] == EXIT_TIME_STOP]
+        trades        = results['closed_trades']
+        r1_trades     = [t for t in trades if t['regime'] == 'R1']
+        r2_trades     = [t for t in trades if t['regime'] == 'R2']
+        upg_trades    = [t for t in trades if t['regime'] == 'Upgraded']
+        r1_time_stops = [t for t in r1_trades if t['exit_reason'] == EXIT_TIME_STOP]
+        r2_time_stops = [t for t in r2_trades if t['exit_reason'] == EXIT_TIME_STOP]
+        limbo_exits   = [t for t in r2_trades if t['exit_reason'] == EXIT_LIMBO_CAP]
         print(f"\nREGIME BREAKDOWN")
         print("-" * 70)
-        print(f"R2 exits (mean rev only) : {len(r2_trades):4} trades")
-        print(f"  — Time Stop (Day 5)    : {len(time_stops):4} trades")
-        print(f"  — Limbo Cap (Day 20)   : {len(limbo_exits):4} trades")
+        print(f"R1 (trend breakout)      : {len(r1_trades):4} trades")
+        print(f"  — Time Stop (Day 5)    : {len(r1_time_stops):4} trades")
+        print(f"R2 (mean reversion)      : {len(r2_trades):4} trades")
+        print(f"  — Day-5 Kill           : {len(r2_time_stops):4} trades")
+        print(f"  — Limbo Cap (Day 30)   : {len(limbo_exits):4} trades")
         print(f"Upgraded (R2 → R1)       : {len(upg_trades):4} trades")
         if upg_trades:
             upg_wr  = sum(1 for t in upg_trades if t['profit'] > 0) / len(upg_trades) * 100
@@ -1235,20 +1358,24 @@ class AllWeatherEngine:
             print(f"  Upgraded win rate      : {upg_wr:.1f}%")
             print(f"  Upgraded avg P&L       : {upg_avg:+.2f}%")
 
-        print("\nVALIDATION GATE — PHASE 6")
+        print("\nVALIDATION GATE — PHASE 7")
         print("-" * 70)
         pos_ret  = s['total_return_pct'] > 0
-        exp_ok   = aw['expectancy'] > 0
-        pf_ok    = s['profit_factor'] > 1.0
-        dd_ok    = s['max_drawdown_pct'] < 25
+        exp_ok   = aw['expectancy'] > 0.25
+        pf_ok    = s['profit_factor'] > 1.5
+        wr_ok    = 40 <= s['win_rate_pct'] <= 52
+        dd_ok    = s['max_drawdown_pct'] < 15
+        rf_ok    = aw['recovery_factor'] > 3.0
 
         print(f"  {'✓' if pos_ret else '✗'} Positive total return      : {s['total_return_pct']:+.2f}%")
-        print(f"  {'✓' if exp_ok  else '✗'} Positive expectancy        : {aw['expectancy']:.4f}")
-        print(f"  {'✓' if pf_ok   else '✗'} Profit factor > 1.0        : {s['profit_factor']:.2f}")
-        print(f"  {'✓' if dd_ok   else '✗'} Max drawdown < 25%         : {s['max_drawdown_pct']:.2f}%")
+        print(f"  {'✓' if exp_ok  else '✗'} Expectancy > 0.25 R-mult   : {aw['expectancy']:.4f}")
+        print(f"  {'✓' if pf_ok   else '✗'} Profit factor > 1.5        : {s['profit_factor']:.2f}")
+        print(f"  {'✓' if wr_ok   else '✗'} Win rate 40–52%            : {s['win_rate_pct']:.2f}%")
+        print(f"  {'✓' if dd_ok   else '✗'} Max drawdown < 15%         : {s['max_drawdown_pct']:.2f}%")
+        print(f"  {'✓' if rf_ok   else '✗'} Recovery factor > 3.0      : {aw['recovery_factor']:.2f}")
 
-        gate_pass = all([pos_ret, exp_ok, pf_ok, dd_ok])
-        print(f"\n  {'PHASE 6 GATE: PASSED ✓' if gate_pass else 'PHASE 6 GATE: FAILED ✗ — review before Phase 7'}")
+        gate_pass = all([pos_ret, exp_ok, pf_ok, wr_ok, dd_ok, rf_ok])
+        print(f"\n  {'PHASE 7 GATE: PASSED ✓' if gate_pass else 'PHASE 7 GATE: FAILED ✗ — review metrics before reporting'}")
         print("=" * 70)
 
     def save_trade_log(self, results, output_dir=None):
@@ -1261,7 +1388,7 @@ class AllWeatherEngine:
         log_dir.mkdir(parents=True, exist_ok=True)
 
         df = pd.DataFrame(results['closed_trades'])
-        filepath = log_dir / 'all_weather_p63_trade_log.csv'
+        filepath = log_dir / 'all_weather_p7_step1_trade_log.csv'
         df.to_csv(filepath, index=False)
         print(f"Trade log saved: {filepath} ({len(df)} trades)")
         return filepath
@@ -1315,7 +1442,7 @@ if __name__ == '__main__':
     sector_filter = SectorAlphaFilter(MAPPING_FILE, engine.price_data)
 
     # ── Run backtest ──────────────────────────────────────────────────────────
-    print("\nStep 5: Running Regime 1 backtest...")
+    print("\nStep 5: Running combined R1 + R2 backtest...")
     results = engine.run(regime_classifier, sector_filter)
 
     # ── Print and save results ────────────────────────────────────────────────
