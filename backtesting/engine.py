@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -164,12 +165,15 @@ class BacktestEngine:
     """
 
     def __init__(self, strategy, initial_capital, start_date, end_date,
-                 transaction_cost_pct=0.009, debug=False, max_positions=5):
-        self.strategy      = strategy
-        self.start_date    = pd.to_datetime(start_date)
-        self.end_date      = pd.to_datetime(end_date)
-        self.debug         = debug
-        self.max_positions = max_positions
+                 transaction_cost_pct=0.009, debug=False, max_positions=5,
+                 sector_map=None, max_positions_per_sector=2):
+        self.strategy                  = strategy
+        self.start_date                = pd.to_datetime(start_date)
+        self.end_date                  = pd.to_datetime(end_date)
+        self.debug                     = debug
+        self.max_positions             = max_positions
+        self.sector_map                = sector_map or {}
+        self.max_positions_per_sector  = max_positions_per_sector
 
         self.portfolio = Portfolio(
             initial_capital=initial_capital,
@@ -449,6 +453,22 @@ class BacktestEngine:
             if not self.portfolio.can_open_position(max_positions):
                 self.signals_skipped.append({**signal, 'skip_reason': 'Max positions'})
                 break
+
+            # Gate: Sector cap
+            if self.sector_map:
+                sym_key = signal['symbol'].replace(".", "_")
+                sector  = self.sector_map.get(sym_key)
+                if sector is not None:
+                    sector_count = sum(
+                        1 for s in self.portfolio.positions
+                        if self.sector_map.get(s.replace(".", "_")) == sector
+                    )
+                    if sector_count >= self.max_positions_per_sector:
+                        self.signals_skipped.append({**signal, 'skip_reason': f'Sector cap ({sector})'})
+                        if self.debug:
+                            print(f"  SECTOR CAP | {date.date()} | {signal['symbol']} "
+                                  f"| {sector} already has {sector_count} positions")
+                        continue
 
             portfolio_value = self.portfolio.get_total_value(date, self.price_data)
             position_value  = portfolio_value * self.strategy.position_size_pct

@@ -1,4 +1,5 @@
 import sys
+import json
 import pandas as pd
 from datetime import datetime
 import os
@@ -95,6 +96,16 @@ def main():
         print(f"  {i:2}. {stock}")
     print()
     
+    # Load sector map (RELIANCE.NS → RELIANCE_NS key format)
+    sector_map_file = r'C:\Projects\trading_engine\strategies\all_weather\final_nifty200_sector_mapping.json'
+    with open(sector_map_file, 'r') as f:
+        raw_sector_map = json.load(f)
+    sector_map = {k.replace('.', '_'): v for k, v in raw_sector_map.items()}
+    print(f"Sector map loaded: {len(sector_map)} symbols across "
+          f"{len(set(sector_map.values()))} sectors")
+    print(f"Sector cap: max 2 positions per sector")
+    print()
+
     # Create backtest engine
     print("="*70)
     print("BACKTEST CONFIGURATION")
@@ -105,15 +116,17 @@ def main():
     print(f"Universe: {len(stocks_to_trade)} stocks")
     print("="*70)
     print()
-    
+
     backtest = BacktestEngine(
         strategy=strategy,
         initial_capital=100000,
-        start_date='2017-01-01',  # Full 8-year period
+        start_date='2023-01-01',  # Full 8-year period
         end_date='2025-12-31',
         transaction_cost_pct=main_config['costs']['total_cost_estimate_pct'],
         debug=False,
-        max_positions=10
+        max_positions=10,
+        sector_map=sector_map,
+        max_positions_per_sector=2
     )
     
     # Run backtest
@@ -188,6 +201,14 @@ def main():
         monthly_path = os.path.join(log_dir, 'strategy1_monthly_equity.csv')
         monthly_equity.to_csv(monthly_path, index=False)
         print(f"Monthly equity curve saved: {monthly_path} ({len(monthly_equity)} months)")
+
+        # Save daily equity curve
+        daily_equity = equity_df['portfolio_value'].reset_index()
+        daily_equity.columns = ['date', 'portfolio_value']
+        daily_equity['date'] = pd.to_datetime(daily_equity['date']).dt.strftime('%Y-%m-%d')
+        daily_path = os.path.join(log_dir, 'strategy1_nifty200_daily_equity.csv')
+        daily_equity.to_csv(daily_path, index=False)
+        print(f"Daily equity curve saved: {daily_path} ({len(daily_equity)} days)")
     else:
         print("\nERROR: Backtest failed to produce results")
 

@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import pandas as pd
 from datetime import datetime
 
@@ -9,21 +10,24 @@ UNIVERSE_FILE   = r"C:\Projects\Backtesting System\nifty200_symbols.txt"
 POSITIONS_FILE  = os.path.join(SCREENING_DIR, "open_positions.csv")
 DATA_DIR        = r"C:\Projects\Backtesting System\data"
 INDICATORS_DIR  = r"C:\Projects\trading_engine\data"
+SECTOR_MAP_FILE = r"C:\Projects\trading_engine\strategies\all_weather\final_nifty200_sector_mapping.json"
+NIFTY_FILE      = r"C:\Projects\Backtesting System\data\NIFTY_NS.csv"
 
 sys.path.insert(0, INDICATORS_DIR)
 from indicators import TechnicalIndicators
 
-TOTAL_CAPITAL    = 100000
-POSITION_SIZE_RS = 5000
-MAX_POSITIONS    = 5
-STOP_LOSS_PCT    = 0.15
-EMA_FAST         = 20
-EMA_SLOW         = 50
-EMA_LONG         = 200
-ADX_PERIOD       = 14
-ADX_THRESHOLD    = 20
-STRATEGY_NAME    = "EMA20_50_ADX20_EMA200"
-MIN_ROWS         = EMA_LONG + ADX_PERIOD + 10
+TOTAL_CAPITAL            = 100000
+POSITION_SIZE_RS         = 10000
+MAX_POSITIONS            = 10
+STOP_LOSS_PCT            = 0.15
+EMA_FAST                 = 20
+EMA_SLOW                 = 50
+EMA_LONG                 = 200
+ADX_PERIOD               = 14
+ADX_THRESHOLD            = 20
+STRATEGY_NAME            = "EMA20_50_ADX20_EMA200"
+MIN_ROWS                 = EMA_LONG + ADX_PERIOD + 10
+MAX_POSITIONS_PER_SECTOR = 2
 
 
 def symbol_to_filename(symbol):
@@ -41,7 +45,7 @@ def load_universe(filepath):
 
 def load_open_positions(filepath):
     if not os.path.exists(filepath):
-        return pd.DataFrame(columns=["Symbol", "Entry_Date", "Entry_Price", "SL_Price", "Shares"])
+        return pd.DataFrame(columns=["Symbol", "Entry_Date", "Entry_Price", "SL_Price", "Shares", "Sector"])
     return pd.read_csv(filepath)
 
 
@@ -67,7 +71,38 @@ def compute_indicators(df):
     return df
 
 
-def detect_signal(df, symbol, open_positions, open_position_count):
+def load_sector_map(filepath):
+    """Load sector map JSON, converting RELIANCE.NS keys to RELIANCE_NS format."""
+    with open(filepath, "r") as f:
+        raw = json.load(f)
+    return {k.replace(".", "_"): v for k, v in raw.items()}
+
+
+def check_macro_filter(nifty_filepath):
+    """Load Nifty data, calculate EMA200, return macro filter status."""
+    df = pd.read_csv(nifty_filepath)
+    close_col = "Adj_Close" if "Adj_Close" in df.columns else "Adj Close"
+    df["EMA200"] = df[close_col].ewm(span=200, adjust=False).mean()
+    latest      = df.iloc[-1]
+    nifty_close = round(float(latest[close_col]), 2)
+    ema200      = round(float(latest["EMA200"]), 2)
+    return {
+        "is_on":       nifty_close > ema200,
+        "nifty_close": nifty_close,
+        "ema200":      ema200,
+    }
+
+
+def count_sector_positions(open_positions, sector, sector_map):
+    """Count how many open positions belong to the given sector."""
+    count = 0
+    for sym in open_positions["Symbol"].values:
+        if sector_map.get(sym.replace(".", "_")) == sector:
+            count += 1
+    return count
+
+
+def detect_signal(df, symbol, open_positions, open_position_count, sector_map):
     df = compute_indicators(df)
     df = df.dropna(subset=["EMA_Fast", "EMA_Slow", "EMA_Long", "ADX"]).reset_index(drop=True)
     if len(df) < 2:
@@ -97,6 +132,12 @@ def detect_signal(df, symbol, open_positions, open_position_count):
 
     # BUY — bullish crossover + ADX + EMA200
     if not in_position and open_position_count < MAX_POSITIONS:
+        # Gate — Sector cap
+        sym_key = symbol.replace(".", "_")
+        sector  = sector_map.get(sym_key)
+        if sector is not None:
+            if count_sector_positions(open_positions, sector, sector_map) >= MAX_POSITIONS_PER_SECTOR:
+                return None
         bullish_cross = (today["EMA_Fast"] > today["EMA_Slow"]) and (prev["EMA_Fast"] <= prev["EMA_Slow"])
         adx_ok        = today["ADX"] >= ADX_THRESHOLD
         above_ema200  = today["Adj Close"] > today["EMA_Long"]
@@ -116,8 +157,63 @@ def main():
     run_date    = datetime.today().strftime("%Y%m%d")
     output_file = os.path.join(SIGNALS_DIR, f"signals_{run_date}.csv")
 
-    universe        = load_universe(UNIVERSE_FILE)
-    open_positions  = load_open_positions(POSITIONS_FILE)
+    universe       = load_universe(UNIVERSE_FILE)
+    open_positions = load_open_positions(POSITIONS_FILE)
+    sector_map     = load_sector_map(SECTOR_MAP_FILE)
+    macro          = check_macro_filter(NIFTY_FILE)
+
+    # Ensure Sector column exists; back-fill from sector_map and persist
+    if "Sector" not in open_positions.columns:
+        open_positions["Sector"] = open_positions["Symbol"].apply(
+            lambda s: sector_map.get(s.replace(".", "_"), "Unknown")
+        )
+        if os.path.exists(POSITIONS_FILE):
+            open_positions.to_csv(POSITIONS_FILE, index=False)
+
+    # ── HEADER ───────────────────────────────────────────────────────
+    print("=" * 55)
+    print(f"  Daily Signals - {datetime.today().strftime('%d %B %Y')}")
+    print("=" * 55)
+
+    # ── OPEN POSITIONS REVIEW ────────────────────────────────────────
+    print(f"\n  OPEN POSITIONS REVIEW ({len(open_positions)} positions)")
+    print(f"  {'-' * 45}")
+    if len(open_positions) == 0:
+        print("  No open positions.")
+    else:
+        today_dt = datetime.today()
+        for _, row in open_positions.iterrows():
+            symbol     = row["Symbol"]
+            entry_date = str(row["Entry_Date"])
+            entry_px   = float(row["Entry_Price"])
+            sl_px      = float(row["SL_Price"])
+            sector     = row["Sector"] if "Sector" in open_positions.columns else \
+                         sector_map.get(symbol.replace(".", "_"), "Unknown")
+            try:
+                days_held = (today_dt - datetime.strptime(entry_date, "%Y-%m-%d")).days
+            except Exception:
+                days_held = "?"
+
+            # Determine status
+            status = "\u2705 Holding"
+            df_pos = load_price_data(symbol, DATA_DIR)
+            if df_pos is not None and len(df_pos) >= MIN_ROWS:
+                df_ind = compute_indicators(df_pos)
+                df_ind = df_ind.dropna(subset=["EMA_Fast", "EMA_Slow", "EMA_Long", "ADX"]).reset_index(drop=True)
+                if len(df_ind) >= 2:
+                    t = df_ind.iloc[-1]
+                    p = df_ind.iloc[-2]
+                    bearish_cross = (t["EMA_Fast"] < t["EMA_Slow"]) and (p["EMA_Fast"] >= p["EMA_Slow"])
+                    sl_hit        = t["Low"] <= sl_px
+                    if bearish_cross:
+                        status = "\u26a0\ufe0f  SELL SIGNAL"
+                    elif sl_hit:
+                        status = "\U0001f534 STOP LOSS HIT"
+
+            print(f"  {symbol:<20} | Entry: {entry_px:>8.2f} | Date: {entry_date} | "
+                  f"Days: {str(days_held):>3} | Sector: {str(sector):<22} | SL: {sl_px:>8.2f} | {status}")
+
+    # ── SIGNAL SCANNING ──────────────────────────────────────────────
     open_count      = len(open_positions)
     slots_available = MAX_POSITIONS - open_count
     buys_this_run   = 0
@@ -130,7 +226,7 @@ def main():
             skipped.append(symbol)
             continue
         effective_open = open_count + buys_this_run
-        result = detect_signal(df, symbol, open_positions, effective_open)
+        result = detect_signal(df, symbol, open_positions, effective_open, sector_map)
         if result is None:
             continue
         result["Strategy"] = STRATEGY_NAME
@@ -149,9 +245,7 @@ def main():
     else:
         pd.DataFrame(columns=cols).to_csv(output_file, index=False)
 
-    print("=" * 55)
-    print(f"  Daily Signals - {datetime.today().strftime('%d %B %Y')}")
-    print(f"  Capital: Rs {TOTAL_CAPITAL:,} | Positions: {open_count}/{MAX_POSITIONS} | Slots: {slots_available}")
+    print(f"\n  Capital: Rs {TOTAL_CAPITAL:,} | Positions: {open_count}/{MAX_POSITIONS} | Slots: {slots_available}")
     print(f"  Universe: {len(universe)} stocks (Nifty 200)")
     print("=" * 55)
 
@@ -187,6 +281,21 @@ def main():
         print(f"\n  Skipped (data unavailable): {len(skipped)}")
         for s in skipped:
             print(f"    - {s}")
+
+    # ── SECTOR SUMMARY ───────────────────────────────────────────────
+    print(f"\n  SECTOR SUMMARY")
+    print(f"  {'-' * 45}")
+    sector_counts = {}
+    for _, row in open_positions.iterrows():
+        sec = row["Sector"] if "Sector" in open_positions.columns else \
+              sector_map.get(row["Symbol"].replace(".", "_"), "Unknown")
+        sector_counts[sec] = sector_counts.get(sec, 0) + 1
+    if sector_counts:
+        for sec, cnt in sorted(sector_counts.items()):
+            flag = "  \u26a0\ufe0f  (at cap)" if cnt >= MAX_POSITIONS_PER_SECTOR else ""
+            print(f"  {str(sec):<30} : {cnt}{flag}")
+    else:
+        print("  No open positions.")
 
     print(f"\n  Output saved to: {output_file}")
     print("=" * 55)
