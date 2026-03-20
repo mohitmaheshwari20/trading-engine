@@ -1,0 +1,2 @@
+Signal,Symbol,Entry_Price,SL_Price,Position_Size_Rs,Shares,Strategy,Reason
+BUY,ADANIPOWER.NS,154.06,130.95,5000,32,EMA20_50_ADX20_EMA200,EMA Crossover Up + ADX OK + Above EMA200

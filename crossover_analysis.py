@@ -11,7 +11,7 @@ Usage:
 
 Inputs:
     - trade_log.csv  : C:\Projects\trading_engine\logs\trade_log.csv
-    - Price data     : C:\Projects\Backtesting System\data\
+    - Price data     : C:\Projects\trading_engine\data\Historical Daily Data\
 """
 
 import os
@@ -23,7 +23,7 @@ import numpy as np
 # =============================================================================
 
 TRADE_LOG_PATH = r"C:\Projects\trading_engine\logs\trade_log.csv"
-DATA_DIR       = r"C:\Projects\Backtesting System\data"
+DATA_DIR       = r"C:\Projects\trading_engine\data\Historical Daily Data"
 PRE_DAYS       = 10
 POST_DAYS      = 5
 VOLUME_MA      = 20

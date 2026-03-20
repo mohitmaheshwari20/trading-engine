@@ -120,7 +120,7 @@ def main():
     backtest = BacktestEngine(
         strategy=strategy,
         initial_capital=100000,
-        start_date='2023-01-01',  # Full 8-year period
+        start_date='2017-01-01',  # Full 8-year period
         end_date='2025-12-31',
         transaction_cost_pct=main_config['costs']['total_cost_estimate_pct'],
         debug=False,

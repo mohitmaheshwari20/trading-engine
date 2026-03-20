@@ -70,7 +70,7 @@ file to reflect the current composition.
 **For any newly added symbols — download price data:**
 1. Identify symbols that are new to the list this quarter
 2. Download historical price data for each new symbol using your data download process
-3. Save to `C:\Projects\Backtesting System\data\SYMBOL_NS.csv` using the standard filename format
+3. Save to `C:\Projects\trading_engine\data\Historical Daily Data\SYMBOL_NS.csv` using the standard filename format
 4. Verify the file has sufficient history (at least 28 rows — ideally 1 year or more for reliable ADX)
 5. Do not proceed to Step 3 until all new symbol data files are in place — the intersection script will flag missing files as warnings and exclude those stocks from the output
 

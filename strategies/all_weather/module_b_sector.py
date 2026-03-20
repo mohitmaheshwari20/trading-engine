@@ -422,7 +422,7 @@ if __name__ == '__main__':
 
     from data.loader import DataLoader
 
-    DATA_DIR     = r'C:\Projects\Backtesting System\data'
+    DATA_DIR     = r'C:\Projects\trading_engine\data\Historical Daily Data'
     MAPPING_FILE = r'C:\Projects\trading_engine\strategies\all_weather\final_nifty200_sector_mapping.json'
 
     # Load all stock data

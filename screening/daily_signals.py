@@ -8,10 +8,10 @@ SCREENING_DIR   = r"C:\Projects\trading_engine\logs"
 SIGNALS_DIR     = os.path.join(SCREENING_DIR, "trend_signals")
 UNIVERSE_FILE   = r"C:\Projects\Backtesting System\nifty200_symbols.txt"
 POSITIONS_FILE  = os.path.join(SCREENING_DIR, "open_positions.csv")
-DATA_DIR        = r"C:\Projects\Backtesting System\data"
+DATA_DIR        = r"C:\Projects\trading_engine\data\Historical Daily Data"
 INDICATORS_DIR  = r"C:\Projects\trading_engine\data"
 SECTOR_MAP_FILE = r"C:\Projects\trading_engine\strategies\all_weather\final_nifty200_sector_mapping.json"
-NIFTY_FILE      = r"C:\Projects\Backtesting System\data\NIFTY_NS.csv"
+NIFTY_FILE      = r"C:\Projects\trading_engine\data\Historical Daily Data\NIFTY_NS.csv"
 
 sys.path.insert(0, INDICATORS_DIR)
 from indicators import TechnicalIndicators

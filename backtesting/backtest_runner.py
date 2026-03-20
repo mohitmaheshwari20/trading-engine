@@ -76,7 +76,7 @@ from backtest_analysis import (
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
-DATA_DIR          = r"C:\Projects\Backtesting System\data"
+DATA_DIR          = r"C:\Projects\trading_engine\data\Historical Daily Data"
 SCREENING_DIR     = r"C:\Projects\trading_engine\screening"
 SYMBOLS_FILE      = r"C:\Projects\trading_engine\nifty200_symbols.txt"
 TEST_RESULTS_DIR  = r"C:\Projects\trading_engine\test_results"

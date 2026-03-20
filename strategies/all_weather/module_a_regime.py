@@ -510,7 +510,7 @@ if __name__ == '__main__':
     sys.path.insert(0, '.')
     from data.vix_loader import load_vix
 
-    DATA_DIR   = r'C:\Projects\Backtesting System\data'
+    DATA_DIR   = r'C:\Projects\trading_engine\data\Historical Daily Data'
     START_DATE = '2017-01-01'
     END_DATE   = '2025-12-31'
 

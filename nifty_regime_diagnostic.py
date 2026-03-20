@@ -26,7 +26,7 @@ import numpy as np
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
-NIFTY_CSV       = r"C:\Projects\Backtesting System\data\NIFTY_NS.CSV"
+NIFTY_CSV       = r"C:\Projects\trading_engine\data\Historical Daily Data\NIFTY_NS.CSV"
 TRADE_LOG       = r"C:\Projects\trading_engine\test_results\s2_backtest_trades_pass1.csv"
 OUTPUT_DIR      = r"C:\Projects\trading_engine\test_results"
 

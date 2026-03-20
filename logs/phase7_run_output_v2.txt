@@ -1,0 +1,278 @@
+C:\Users\mohit\AppData\Roaming\Python\Python314\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (7.1.0)/charset_normalizer (3.4.4) doesn't match a supported version!
+  warnings.warn(
+Step 1: Loading VIX data...
+
+============================================================
+VIX DATA LOADER
+============================================================
+Fetching India VIX (^INDIAVIX) from 2017-01-01 to 2025-12-31...
+  Fetched 2205 trading days (2017-01-02 to 2025-12-30)
+  VIX range: 9.15 to 83.61
+
+  Source        : PRIMARY
+  Trading days  : 2205
+  Date range    : 2017-01-02 to 2025-12-30
+  VIX range     : 9.15 to 83.61 (mean: 16.55)
+
+  Regime distribution:
+    ON      (VIX < 22)   : 1948 days (88.3%)
+    CAUTION (VIX 22-25)  : 132 days (6.0%)
+    OFF     (VIX > 25)   : 125 days (5.7%)
+============================================================
+
+
+Step 2: Building Module A (Regime Classifier)...
+
+============================================================
+MODULE A — MARKET REGIME CLASSIFIER
+============================================================
+  Nifty 50 loaded  : 3979 rows (2010-01-04 to 2026-03-16)
+  EMA200 ready     : from 2010-01-04 onwards
+  Current Close    : 23,138.80
+  Current EMA200   : 25,138.73
+  Price vs EMA200  : BELOW ✗
+
+  Regime series built : 2220 trading days
+  Date range          : 2017-01-02 to 2025-12-31
+
+  Regime distribution:
+    ON      : 1737 days (78.2%)
+    CAUTION :  111 days (5.0%)
+    OFF     :  372 days (16.8%)
+============================================================
+
+
+Step 3: Loading stock price data...
+Loading price data for 200 symbols...
+  Loaded 197/200 symbols
+
+
+Step 4: Building Module B (Sector Alpha Filter)...
+
+============================================================
+MODULE B — SECTOR ALPHA FILTER
+============================================================
+  Sector mapping loaded : 200 symbols
+  Named sectors         : 17 sectors, 160 stocks
+  Others bucket         : 40 stocks
+
+  Sector breakdown:
+    Others                         : 40 stocks
+    Financial Services             : 28 stocks
+    Capital Goods                  : 15 stocks
+    Healthcare                     : 14 stocks
+    FMCG                           : 13 stocks
+    IT                             : 12 stocks
+    Auto                           : 12 stocks
+    Metals & Mining                : 10 stocks
+    Power                          : 9 stocks
+    Consumer Durables              : 8 stocks
+    Energy                         : 8 stocks
+    Chemicals                      : 6 stocks
+    Realty                         : 6 stocks
+    Consumer Services              : 6 stocks
+    Construction Materials         : 5 stocks
+    Telecom                        : 4 stocks
+    Logistics                      : 2 stocks
+    Construction                   : 2 stocks
+
+  Price data available  : 197 symbols
+  Matched (map ∩ data)  : 197 symbols
+============================================================
+
+
+======================================================================
+RUNNING VERSION A — S1 PRIORITY OVER R2
+======================================================================
+======================================================================
+PHASE 7 UNIFIED ENGINE — VERSION A
+  Ranking: S1 priority over R2 (all S1 before any R2)
+======================================================================
+Period   : 2017-01-01 to 2025-12-31
+Capital  : ₹100,000
+Universe : 197 stocks loaded
+
+Trading days : 2224
+Processing...
+
+  10% | 2017-11-22 | Equity: ₹143,066 | Pos: 5 (S1=5 R2=0) | Regime: ON
+  20% | 2018-10-16 | Equity: ₹138,790 | Pos: 2 (S1=2 R2=0) | Regime: OFF
+  30% | 2019-09-16 | Equity: ₹113,268 | Pos: 0 (S1=0 R2=0) | Regime: OFF
+  40% | 2020-08-10 | Equity: ₹110,389 | Pos: 0 (S1=0 R2=0) | Regime: CAUTION
+  50% | 2021-06-30 | Equity: ₹158,118 | Pos: 10 (S1=10 R2=0) | Regime: ON
+  60% | 2022-05-24 | Equity: ₹165,569 | Pos: 1 (S1=1 R2=0) | Regime: OFF
+  70% | 2023-04-17 | Equity: ₹190,019 | Pos: 4 (S1=4 R2=0) | Regime: ON
+  80% | 2024-03-07 | Equity: ₹261,254 | Pos: 3 (S1=3 R2=0) | Regime: ON
+  90% | 2025-01-31 | Equity: ₹292,292 | Pos: 2 (S1=2 R2=0) | Regime: OFF
+  100% | 2025-12-24 | Equity: ₹269,798 | Pos: 3 (S1=3 R2=0) | Regime: ON
+
+Closing remaining open positions...
+Closed 3 positions at end
+
+
+======================================================================
+PHASE 7 UNIFIED ENGINE — VERSION A RESULTS
+  Ranking: S1 priority over R2
+======================================================================
+
+RETURNS
+----------------------------------------------------------------------
+Initial Capital      : ₹     100,000
+Final Capital        : ₹     273,850
+Total Return         :  +173.85%
+Annual Return        :   +11.85%
+Max Drawdown         :    29.34%
+Sharpe Ratio         :    0.873  (primary comparison)
+Transaction Costs    : ₹      11,499
+
+OVERALL TRADE STATISTICS
+----------------------------------------------------------------------
+Total Trades         :      227
+Win Rate             :    45.81%
+Profit Factor        :     1.89
+
+S1 (EMA CROSSOVER) BREAKDOWN
+----------------------------------------------------------------------
+S1 Trades            :      160
+S1 Win Rate          :    39.38%
+S1 Profit Factor     :     1.96
+S1 Avg P&L           :    +9.64%
+
+R2 (MEAN REVERSION) BREAKDOWN
+----------------------------------------------------------------------
+R2 Trades            :       67
+R2 Win Rate          :    61.19%
+R2 Profit Factor     :     1.52
+R2 Avg P&L           :    +1.21%
+
+OPPORTUNITY COST (S1 blocked by R2)
+----------------------------------------------------------------------
+S1 Signals Blocked   :        8
+
+S1 EXIT REASON BREAKDOWN
+----------------------------------------------------------------------
+  S1 EMA Bearish Cross               :   97
+  S1 Trailing Stop (15%)             :   56
+  Circuit Breaker                    :    4
+  Backtest End                       :    3
+
+R2 BREAKDOWN DETAIL
+----------------------------------------------------------------------
+  R2 (mean reversion)    :   66 trades
+  — Day-5 Kill           :   17 trades
+  — Limbo Cap (Day 30)   :    3 trades
+  Upgraded (R2→R1)       :    1 trades
+
+======================================================================
+Trade log saved     : C:\Projects\trading_engine\logs\phase7_versionA_trade_log.csv (227 trades)
+Opportunity cost    : C:\Projects\trading_engine\logs\phase7_versionA_opportunity_cost.csv (8 records)
+
+======================================================================
+RUNNING VERSION B — PURE ALPHA RANKING
+======================================================================
+======================================================================
+PHASE 7 UNIFIED ENGINE — VERSION B
+  Ranking: Pure alpha across all signals
+======================================================================
+Period   : 2017-01-01 to 2025-12-31
+Capital  : ₹100,000
+Universe : 197 stocks loaded
+
+Trading days : 2224
+Processing...
+
+  10% | 2017-11-22 | Equity: ₹143,066 | Pos: 5 (S1=5 R2=0) | Regime: ON
+  20% | 2018-10-16 | Equity: ₹138,790 | Pos: 2 (S1=2 R2=0) | Regime: OFF
+  30% | 2019-09-16 | Equity: ₹113,268 | Pos: 0 (S1=0 R2=0) | Regime: OFF
+  40% | 2020-08-10 | Equity: ₹110,389 | Pos: 0 (S1=0 R2=0) | Regime: CAUTION
+  50% | 2021-06-30 | Equity: ₹158,118 | Pos: 10 (S1=10 R2=0) | Regime: ON
+  60% | 2022-05-24 | Equity: ₹165,569 | Pos: 1 (S1=1 R2=0) | Regime: OFF
+  70% | 2023-04-17 | Equity: ₹190,019 | Pos: 4 (S1=4 R2=0) | Regime: ON
+  80% | 2024-03-07 | Equity: ₹261,254 | Pos: 3 (S1=3 R2=0) | Regime: ON
+  90% | 2025-01-31 | Equity: ₹292,292 | Pos: 2 (S1=2 R2=0) | Regime: OFF
+  100% | 2025-12-24 | Equity: ₹269,798 | Pos: 3 (S1=3 R2=0) | Regime: ON
+
+Closing remaining open positions...
+Closed 3 positions at end
+
+
+======================================================================
+PHASE 7 UNIFIED ENGINE — VERSION B RESULTS
+  Ranking: Pure alpha (all signals mixed)
+======================================================================
+
+RETURNS
+----------------------------------------------------------------------
+Initial Capital      : ₹     100,000
+Final Capital        : ₹     273,850
+Total Return         :  +173.85%
+Annual Return        :   +11.85%
+Max Drawdown         :    29.34%
+Sharpe Ratio         :    0.873  (primary comparison)
+Transaction Costs    : ₹      11,499
+
+OVERALL TRADE STATISTICS
+----------------------------------------------------------------------
+Total Trades         :      227
+Win Rate             :    45.81%
+Profit Factor        :     1.89
+
+S1 (EMA CROSSOVER) BREAKDOWN
+----------------------------------------------------------------------
+S1 Trades            :      160
+S1 Win Rate          :    39.38%
+S1 Profit Factor     :     1.96
+S1 Avg P&L           :    +9.64%
+
+R2 (MEAN REVERSION) BREAKDOWN
+----------------------------------------------------------------------
+R2 Trades            :       67
+R2 Win Rate          :    61.19%
+R2 Profit Factor     :     1.52
+R2 Avg P&L           :    +1.21%
+
+OPPORTUNITY COST (S1 blocked by R2)
+----------------------------------------------------------------------
+S1 Signals Blocked   :        8
+
+S1 EXIT REASON BREAKDOWN
+----------------------------------------------------------------------
+  S1 EMA Bearish Cross               :   97
+  S1 Trailing Stop (15%)             :   56
+  Circuit Breaker                    :    4
+  Backtest End                       :    3
+
+R2 BREAKDOWN DETAIL
+----------------------------------------------------------------------
+  R2 (mean reversion)    :   66 trades
+  — Day-5 Kill           :   17 trades
+  — Limbo Cap (Day 30)   :    3 trades
+  Upgraded (R2→R1)       :    1 trades
+
+======================================================================
+Trade log saved     : C:\Projects\trading_engine\logs\phase7_versionB_trade_log.csv (227 trades)
+Opportunity cost    : C:\Projects\trading_engine\logs\phase7_versionB_opportunity_cost.csv (8 records)
+
+======================================================================
+VERSION A vs VERSION B — COMPARISON SUMMARY
+======================================================================
+
+Metric                       Version A    Version B
+----------------------------------------------------
+Total Return %                 +173.85      +173.85
+Annual Return %                 +11.85       +11.85
+Max Drawdown %                   29.34        29.34
+Sharpe Ratio                     0.873        0.873
+Profit Factor                     1.89         1.89
+Win Rate %                       45.81        45.81
+Total Trades                       227          227
+S1 Trades                          160          160
+R2 Trades                           67           67
+S1 Win Rate %                    39.38        39.38
+R2 Win Rate %                    61.19        61.19
+S1 PF                             1.96         1.96
+R2 PF                             1.52         1.52
+S1 Blocked                           8            8
+
+  Sharpe winner: Version A
+======================================================================

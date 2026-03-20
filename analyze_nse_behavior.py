@@ -22,7 +22,7 @@ warnings.filterwarnings('ignore')
 # CONFIGURATION
 # ============================================================================
 
-DATA_DIR = Path(r"C:\Projects\Backtesting System\data")
+DATA_DIR = Path(r"C:\Projects\trading_engine\data\Historical Daily Data")
 UNIVERSE_FILE = Path(r"C:\Projects\Backtesting System\nifty200_universe.csv")
 START_DATE = '2017-01-01'
 END_DATE = '2026-02-19'

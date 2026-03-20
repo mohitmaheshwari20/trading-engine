@@ -56,7 +56,7 @@ from typing import Optional
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
-DATA_DIR        = r"C:\Projects\Backtesting System\data"
+DATA_DIR        = r"C:\Projects\trading_engine\data\Historical Daily Data"
 SR_LOG_DIR      = r"C:\Projects\trading_engine\logs\SR Logs"
 LOG_DIR         = r"C:\Projects\trading_engine\logs\Entry Logs"
 NIFTY_FILE      = "NIFTY_NS.CSV"

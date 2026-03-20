@@ -1,2 +1,3 @@
-Symbol,Entry_Date,Entry_Price,SL_Price,Shares,Strategy
-,,,,,
+Symbol,Entry_Date,Entry_Price,SL_Price,Shares,Sector
+NTPCGREEN_NS,2026-03-16,96.35,81.9,55,Power
+ADANIPOWER_NS,2026-03-17,155.86,132.481,32,Power

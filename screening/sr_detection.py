@@ -48,7 +48,7 @@ from typing import Optional
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
-DATA_DIR        = r"C:\Projects\Backtesting System\data"
+DATA_DIR        = r"C:\Projects\trading_engine\data\Historical Daily Data"
 LOG_DIR         = r"C:\Projects\trading_engine\logs\SR Logs"
 MOMENTUM_LOG    = r"C:\Projects\trading_engine\logs\Momentum Logs"
 SYMBOLS_FILE    = r"C:\Projects\trading_engine\nifty200_symbols.txt"

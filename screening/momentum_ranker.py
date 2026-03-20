@@ -52,7 +52,7 @@ import numpy as np
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
-DATA_DIR        = r"C:\Projects\Backtesting System\data"
+DATA_DIR        = r"C:\Projects\trading_engine\data\Historical Daily Data"
 LOG_DIR         = r"C:\Projects\trading_engine\logs\Momentum Logs"
 SYMBOLS_FILE    = r"C:\Projects\trading_engine\nifty200_symbols.txt"
 LATEST_FILE     = "momentum_ranks_latest.csv"

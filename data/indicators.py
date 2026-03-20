@@ -383,7 +383,7 @@ def test_indicators():
     from loader import DataLoader
     
     # UPDATE THIS PATH
-    data_path = r"C:\Projects\Backtesting System\data"
+    data_path = r"C:\Projects\trading_engine\data\Historical Daily Data"
     
     loader = DataLoader(data_path)
     

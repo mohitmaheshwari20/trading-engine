@@ -94,7 +94,7 @@ def test_loader():
     """
     
     # UPDATE THIS PATH
-    data_path = r"C:\Projects\Backtesting System\data"  # Change this!
+    data_path = r"C:\Projects\trading_engine\data\Historical Daily Data"  # Change this!
     
     print("Testing DataLoader...")
     print(f"Data directory: {data_path}\n")

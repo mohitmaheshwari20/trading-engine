@@ -1407,7 +1407,7 @@ if __name__ == '__main__':
     from strategies.all_weather.module_a_regime import RegimeClassifier
     from strategies.all_weather.module_b_sector import SectorAlphaFilter
 
-    DATA_DIR     = r'C:\Projects\Backtesting System\data'
+    DATA_DIR     = r'C:\Projects\trading_engine\data\Historical Daily Data'
     MAPPING_FILE = r'C:\Projects\trading_engine\strategies\all_weather\final_nifty200_sector_mapping.json'
     LOG_DIR      = r'C:\Projects\trading_engine\logs'
 

@@ -3,6 +3,7 @@ import datetime as dt
 from typing import List, Optional
 from datetime import datetime, timedelta
 
+import numpy as np
 import pandas as pd
 import yfinance as yf
 import requests
@@ -12,9 +13,9 @@ import urllib.parse
 
 # ------------- CONFIG -------------
 
-DATA_DIR = r"C:\Projects\Backtesting System\data"
+DATA_DIR = r"C:\Projects\trading_engine\data\Historical Daily Data"
 
-# Maps our sector index symbol → NSE index name used in the API
+# Maps our sector index symbol -> NSE index name used in the API
 NSE_SECTOR_INDEX_NAME = {
     "NIFTY_BANK_NS": "NIFTY BANK",
     "NIFTY_IT_NS": "NIFTY IT",
@@ -172,6 +173,64 @@ def _normalize_yf_df(symbol: str, raw_df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def validate_price_data(symbol: str, df: pd.DataFrame,
+                        verbose: bool = False) -> dict:
+    """
+    Run data quality checks on a downloaded price DataFrame.
+    Returns dict with check results.
+    """
+    issues = []
+
+    # Check 1: Minimum row count
+    if len(df) < 200:
+        issues.append(f"Low row count: {len(df)} rows (min 200 expected)")
+
+    # Check 2: No missing dates on trading days
+    df["Date"] = pd.to_datetime(df["Date"])
+    date_range = pd.date_range(df["Date"].min(), df["Date"].max(), freq="B")
+    missing_days = len(date_range) - len(df)
+    if missing_days > len(date_range) * 0.05:  # >5% missing
+        issues.append(f"Excessive missing dates: {missing_days} gaps "
+                      f"({missing_days/len(date_range)*100:.1f}% of trading days)")
+
+    # Check 3: No zero or negative prices
+    zero_prices = (df["Close"] <= 0).sum()
+    if zero_prices > 0:
+        issues.append(f"Zero/negative Close prices: {zero_prices} rows")
+
+    # Check 4: No extreme single-day price jumps (>50%)
+    price_changes = df["Close"].pct_change().abs()
+    extreme_jumps = (price_changes > 0.5).sum()
+    if extreme_jumps > 0:
+        jump_dates = df.loc[price_changes > 0.5, "Date"].tolist()
+        issues.append(f"Extreme price jumps >50%: {extreme_jumps} days "
+                      f"(check corporate actions: {jump_dates[:3]})")
+
+    # Check 5: No zero volume days (excluding weekends)
+    zero_volume = (df["Volume"] == 0).sum()
+    if zero_volume > len(df) * 0.02:  # >2% zero volume
+        issues.append(f"High zero-volume days: {zero_volume} "
+                      f"({zero_volume/len(df)*100:.1f}%)")
+
+    result = {
+        "symbol": symbol,
+        "rows": len(df),
+        "start": df["Date"].min().date(),
+        "end": df["Date"].max().date(),
+        "issues": issues,
+        "passed": len(issues) == 0
+    }
+
+    if verbose:
+        status = "\u2705" if result["passed"] else "\u26a0\ufe0f"
+        print(f"  {status} {symbol}: {len(df)} rows "
+              f"({result['start']} to {result['end']})")
+        for issue in issues:
+            print(f"      \u26a0\ufe0f  {issue}")
+
+    return result
+
+
 # ------------- PER-SYMBOL FUNCTIONS -------------
 
 def download_full_history(
@@ -190,11 +249,11 @@ def download_full_history(
     filepath = get_symbol_filename(symbol)
 
     start_str = start.strftime("%Y-%m-%d")
-    # yfinance 'end' is exclusive for daily data → use tomorrow
+    # yfinance 'end' is exclusive for daily data -> use tomorrow
     end_exclusive = end + dt.timedelta(days=1)
     end_str = end_exclusive.strftime("%Y-%m-%d")
 
-    print(f"[FULL] {symbol}: {start_str} → {end} (saving to {os.path.basename(filepath)})")
+    print(f"[FULL] {symbol}: {start_str} -> {end} (saving to {os.path.basename(filepath)})")
 
     raw = yf.download(
         symbol,
@@ -212,13 +271,14 @@ def download_full_history(
 
     df.to_csv(filepath, index=False)
     print(f"  Saved {len(df)} rows. Last date: {df['Date'].max().date()}")
+    validate_price_data(symbol, df, verbose=True)
 
 
 def update_history(symbol: str) -> None:
     """
     Incrementally update CSV for `symbol`:
 
-    - If file doesn't exist → full download.
+    - If file doesn't exist -> full download.
     - Else:
         - load CSV,
         - find last Date,
@@ -262,7 +322,7 @@ def update_history(symbol: str) -> None:
     end_exclusive = end + dt.timedelta(days=1)
     end_str = end_exclusive.strftime("%Y-%m-%d")
 
-    print(f"[UPDATE] {symbol}: {start} → {end}")
+    print(f"[UPDATE] {symbol}: {start} -> {end}")
 
     raw_new = yf.download(
         symbol,
@@ -290,7 +350,7 @@ def update_history(symbol: str) -> None:
         f"last date = {combined['Date'].max().date()}"
     )
 
-def download_nifty_index(data_dir: str, start: str = "2010-01-01"):
+def download_nifty_index(data_dir: str, start: str = "2015-01-01"):
     """
     Download or incrementally update NIFTY 50 index (^NSEI) data.
 
@@ -415,6 +475,7 @@ def download_all_history(
             download_full_history(sym, start=start, end=end)
         except Exception as e:
             print(f"  ERROR while downloading {sym}: {e}")
+        time.sleep(0.1)
     print("=== DONE FULL DOWNLOAD ===")
 
 
@@ -428,13 +489,14 @@ def update_all_history(symbols: List[str]) -> None:
             update_history(sym)
         except Exception as e:
             print(f"  ERROR while updating {sym}: {e}")
+        time.sleep(0.1)
     print("=== DONE UPDATE ===")
 
 def sync_all_history(symbols: list[str]) -> None:
     """
     For each symbol:
-        - If CSV exists → incremental update
-        - If CSV doesn't exist → full history download
+        - If CSV exists -> incremental update
+        - If CSV doesn't exist -> full history download
 
     This automatically picks up newly added symbols in symbols.txt.
     """
@@ -444,14 +506,124 @@ def sync_all_history(symbols: list[str]) -> None:
             update_history(sym)
         except Exception as e:
             print(f"  ERROR while syncing {sym}: {e}")
+        time.sleep(0.1)
     print("=== DONE SYNC ===")
 
 
+def download_vix_data(data_dir: str, start: str = "2015-01-01") -> None:
+    """
+    Download or incrementally update India VIX (^INDIAVIX) data.
+    Primary source: ^INDIAVIX via yfinance
+    Fallback: 20-day realized volatility of Nifty 50 x sqrt(252) x 100
+    Output file: INDIAVIX_NS.csv
+    Schema: Date, VIX
+    """
+    filepath = os.path.join(data_dir, "INDIAVIX_NS.csv")
+    vix_ticker = "^INDIAVIX"
+
+    # Determine start date
+    if os.path.exists(filepath):
+        existing = pd.read_csv(filepath, parse_dates=["Date"])
+        if not existing.empty:
+            last_date = existing["Date"].max().date()
+            download_start = (last_date + dt.timedelta(days=1)).strftime("%Y-%m-%d")
+            today = dt.date.today()
+            if last_date >= today:
+                print(f"[VIX] Already up to date. Last date: {last_date}")
+                return
+            print(f"[VIX] Updating from {download_start}")
+        else:
+            existing = None
+            download_start = start
+    else:
+        existing = None
+        download_start = start
+        print(f"[VIX] First download from {download_start}")
+
+    end_exclusive = (dt.date.today() + dt.timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # Try primary source
+    try:
+        raw = yf.download(vix_ticker, start=download_start,
+                          end=end_exclusive, interval="1d",
+                          auto_adjust=False, progress=False)
+
+        if raw is not None and not raw.empty:
+            if isinstance(raw.columns, pd.MultiIndex):
+                raw.columns = raw.columns.get_level_values(0)
+            raw = raw.reset_index()
+            raw["Date"] = pd.to_datetime(raw["Date"])
+            vix_df = raw[["Date", "Close"]].copy()
+            vix_df.columns = ["Date", "VIX"]
+            source = "primary"
+        else:
+            vix_df = None
+            source = None
+    except Exception as e:
+        print(f"[VIX] Primary source failed: {e}")
+        vix_df = None
+        source = None
+
+    # Fallback: realized volatility from Nifty 50
+    if vix_df is None or vix_df.empty:
+        print("[VIX] Falling back to realized volatility from ^NSEI")
+        try:
+            raw_nifty = yf.download("^NSEI", start=download_start,
+                                    end=end_exclusive, interval="1d",
+                                    auto_adjust=False, progress=False)
+            if isinstance(raw_nifty.columns, pd.MultiIndex):
+                raw_nifty.columns = raw_nifty.columns.get_level_values(0)
+            close = raw_nifty["Close"].dropna()
+            log_ret = np.log(close / close.shift(1)).dropna()
+            realized_vol = (log_ret.rolling(20).std() * np.sqrt(252) * 100).dropna()
+            realized_vol = realized_vol.reset_index()
+            realized_vol.columns = ["Date", "VIX"]
+            realized_vol["Date"] = pd.to_datetime(realized_vol["Date"])
+            vix_df = realized_vol
+            source = "fallback"
+            print("[VIX] WARNING: Using realized vol fallback — "
+                  "calibrate against actual VIX before production use")
+        except Exception as e:
+            print(f"[VIX] Fallback also failed: {e}")
+            return
+
+    # Merge with existing
+    if existing is not None and not existing.empty:
+        combined = pd.concat([existing, vix_df], ignore_index=True)
+        combined = combined.drop_duplicates(subset=["Date"]).sort_values("Date")
+    else:
+        combined = vix_df.sort_values("Date")
+
+    combined.to_csv(filepath, index=False)
+    print(f"[VIX] Saved {len(combined)} rows | Source: {source}")
+    print(f"[VIX] Range: {combined['Date'].min().date()} "
+          f"to {combined['Date'].max().date()}")
+
+
+# ─────────────────────────────────────────────────────
+# SECTOR INDEX DATA — KNOWN LIMITATION
+# ─────────────────────────────────────────────────────
+# NSE sector index data via API is unreliable and
+# frequently breaks due to NSE API changes.
+#
+# RECOMMENDED ALTERNATIVE (implemented in All-Weather
+# strategy module_b_sector.py):
+#   Use stock-level returns relative to sector median
+#   as a proxy for sector alpha. This approach:
+#   - Requires only individual stock OHLCV data
+#   - Is not dependent on NSE API availability
+#   - Has been validated on Nifty 200 (2017-2025)
+#   - Pass rates: 46-47% (within 40-60% target)
+#
+# If sector index data is needed, use yfinance with
+# these tickers: ^CNXBANK, ^CNXIT, ^CNXPHARMA etc.
+# Note: yfinance coverage is incomplete pre-2015.
+# ─────────────────────────────────────────────────────
 def download_sector_index_from_nse_V1(
     index_code: str,
     nse_name: str,
     data_dir: str,
-    start: str = "2010-01-01",
+    start: str = "2015-01-01",
 ) -> None:
     """
     Download (or update) sector index data from NSE for a given index.
@@ -531,13 +703,13 @@ def download_sector_index_from_nse_V1(
         # Use session.get with params directly instead of manual encoding
 
 
-        print(f"  [NSE-INDEX] {index_code}: chunk {current_start} → {current_end}")
+        print(f"  [NSE-INDEX] {index_code}: chunk {current_start} -> {current_end}")
         try:
             resp = session.get(base_url, params=params, timeout=15)
             resp.raise_for_status()
             payload = resp.json()
         except requests.exceptions.HTTPError as e:
-            print(f"  [ERROR] {index_code}: failed chunk {current_start}→{current_end}: {e}")
+            print(f"  [ERROR] {index_code}: failed chunk {current_start}->{current_end}: {e}")
             try:
                 print(f"  [ERROR] Response: {resp.status_code} - {resp.text[:200]}")
             except:
@@ -546,7 +718,7 @@ def download_sector_index_from_nse_V1(
             time.sleep(0.8)
             continue  # Skip to next iteration
         except Exception as e:
-            print(f"  [ERROR] {index_code}: failed chunk {current_start}→{current_end}: {e}")
+            print(f"  [ERROR] {index_code}: failed chunk {current_start}->{current_end}: {e}")
             current_start = current_end + timedelta(days=1)
             time.sleep(0.8)
             continue  # Skip to next iteration
@@ -590,7 +762,7 @@ def download_sector_index_from_nse_V1(
             )
 
             if not date_str or close is None:
-                # essential fields missing → skip
+                # essential fields missing -> skip
                 continue
 
             all_rows.append(
@@ -648,7 +820,7 @@ def download_sector_index_from_nse(
     index_code: str,
     nse_name: str,
     data_dir: str,
-    start: str = "2010-01-01",
+    start: str = "2015-01-01",
 ) -> None:
     """
     Download sector index data using nsepy library.
@@ -720,7 +892,7 @@ def download_sector_index_from_nse(
 
 def download_all_sector_indices_from_nse(
     data_dir: str,
-    start: str = "2010-01-01",
+    start: str = "2015-01-01",
 ) -> None:
     """
     Download / update all configured NIFTY sector indices from NSE.
@@ -770,10 +942,10 @@ def load_existing_sector_map(path: str) -> dict:
 
 if __name__ == "__main__":
    # --- NIFTY 50 ---
-    symbols = load_symbol_list(r"C:\Projects\Backtesting System\nifty200_symbols.txt")  # or nifty50_symbols.txt
+    symbols = load_symbol_list("nifty200_symbols.txt")  # or nifty50_symbols.txt
 
     try:
-        nifty50_symbols = load_symbol_list(r"C:\Projects\Backtesting System\nifty50_symbols.txt")
+        nifty50_symbols = load_symbol_list("nifty50_symbols.txt")
         print(f"[INFO] Loaded {len(nifty50_symbols)} NIFTY50 symbols.")
     except FileNotFoundError:
         nifty50_symbols = []
@@ -782,7 +954,7 @@ if __name__ == "__main__":
 
     # --- NIFTY 200 ---
     try:
-        nifty200_symbols = load_symbol_list(r"C:\Projects\Backtesting System\nifty200_symbols.txt")
+        nifty200_symbols = load_symbol_list("nifty200_symbols.txt")
         print(f"[INFO] Loaded {len(nifty200_symbols)} NIFTY200 symbols.")
     except FileNotFoundError:
         nifty200_symbols = []
@@ -797,8 +969,28 @@ if __name__ == "__main__":
     # Sync history for all symbols (full download or incremental update)
     sync_all_history(all_symbols)
 
-    #Keep NIFTY index updated (for regime filters etc.)
-    download_nifty_index(DATA_DIR, start="2010-01-01")
+    # Keep NIFTY index updated (for regime filters etc.)
+    download_nifty_index(DATA_DIR, start="2015-01-01")
+
+    # Download VIX data
+    download_vix_data(DATA_DIR, start="2015-01-01")
+
+    # Run quality check on all downloaded files
+    print("\n=== DATA QUALITY CHECK ===")
+    quality_issues = []
+    for sym in all_symbols:
+        filepath = get_symbol_filename(sym)
+        if os.path.exists(filepath):
+            df = pd.read_csv(filepath)
+            result = validate_price_data(sym, df, verbose=True)
+            if not result["passed"]:
+                quality_issues.append(result)
+    print(f"\nTotal symbols with issues: {len(quality_issues)}")
+    if quality_issues:
+        print("Symbols needing review:")
+        for r in quality_issues:
+            print(f"  {r['symbol']}: {r['issues']}")
+    print("=== DONE ===")
 
     #download_all_sector_indices_from_nse(DATA_DIR, start="2010-01-01")
 

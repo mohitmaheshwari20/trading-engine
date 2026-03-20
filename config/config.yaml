@@ -6,7 +6,7 @@ system:
   
 # Data paths
 data:
-  source_dir: "C:/Projects/Backtesting System/data"  # UPDATE THIS
+  source_dir: "C:/Projects/trading_engine/data/Historical Daily Data"  # UPDATE THIS
   universe: "nifty200"
   start_date: "2017-01-01"  # Use 2017+ for backtesting (2015-2016 for walk-forward validation)
   
